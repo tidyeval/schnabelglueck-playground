@@ -1,88 +1,137 @@
-export const W = 480, H = 850, WATER = 360, LENGTH = 6500, SPEED = 170;
-export const ROCK = { left: 3080, right: 4080, top: 535, bottom: 600 };
+import { dayKey, seedForDay } from './daily.js';
+export const W = 480, H = 850, WATER = 360, LENGTH = 7500, SPEED = 170;
+export const ROCK = { left: 3480, right: 4480, top: 535, bottom: 600 };
+export const TIDE = { left: 5500, right: 5750, top: 425, bottom: 545 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export function createRun() {
+export function createRun(day = dayKey()) {
+  const seed = seedForDay(day), shift = (seed % 61) - 30;
   const fish = [];
-  for (const [group, cx, cy] of [[0, 650, 480], [1, 1950, 505], [2, 5350, 480]]) {
+  for (const [group, cx, cy] of [[0, 650 + shift, 480], [1, 2400 - shift, 505], [2, 6240 + shift, 480]]) {
     for (let i = 0; i < 12; i++) fish.push({ id: `${group}-${i}`, group, x: cx + (i % 4) * 27, y: cy + Math.floor(i / 4) * 24,
-      homeY: cy + Math.floor(i / 4) * 24, vx: 0, vy: 0, phase: i * 1.7, caught: false, reacted: false });
+      homeY: cy + Math.floor(i / 4) * 24, vx: -24, vy: 0, heading: 0, phase: i * 1.7, caught: false, reacted: false });
   }
-  for (let i = 0; i < 3; i++) fish.push({ id: `gold-${i}`, group: -1, golden: true, x: 3260 + i * 300, y: 680, caught: false });
-  return { mode: 'playing', time: 0, distance: 0, player: { x: 110, y: 265, vy: 0, wet: false, breath: 8 }, fish,
+  for (let i = 0; i < 3; i++) fish.push({ id: `gold-${i}`, group: -1, golden: true, x: 3660 + i * 300, y: 680, caught: false, heading: 0 });
+  for (let i = 0; i < 3; i++) fish.push({ id: `guide-${i}`, group: -1, guide: true, x: 6060 + i * 120, y: 470 + i * 10, caught: false, heading: 0 });
+  return { mode: 'playing', day, seed, time: 0, distance: 0, water: WATER, player: { x: 110, y: 265, vy: 0, wet: false, breath: 8, gulp: 0, breach: 0, relief: 0 }, fish,
     score: 0, caught: 0, gold: 0, reactions: 0, rockHits: 0, scares: 0, bubbleUsed: false, tunnelEntered: false,
-    routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620 } };
+    routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620, active: false }, boat: { x: 2500 + shift, active: false },
+    turtle: { x: 1110 + shift, y: 470, helped: false }, guideRevealed: false, guideCaught: 0, guideBubbleUsed: false,
+    tideOpen: false, tideCommitted: false, tidePassed: false, tideBypassed: false, tideWait: 0,
+    story: [], section: 'swarm', features: { swarm: false, tide: false, help: false, risk: false, story: false, daily: true }, effects: [] };
 }
-function message(s, text) { s.event = text; s.eventUntil = s.time + 2.2; }
+function message(s, text) { s.event = text; s.eventUntil = s.time + 2.8; }
 export function stepSchool(s, dt) {
-  const px = s.distance + s.player.x;
-  const groups = new Map();
-  for (const f of s.fish) if (!f.caught && !f.golden) {
+  const px = s.distance + s.player.x, groups = new Map();
+  for (const f of s.fish) if (!f.caught && f.group >= 0) {
     const g = groups.get(f.group) || { x: 0, y: 0, n: 0 }; g.x += f.x; g.y += f.y; g.n++; groups.set(f.group, g);
   }
   for (const f of s.fish) {
-    if (f.caught || f.golden) continue;
+    if (f.caught || f.group < 0) continue;
     const g = groups.get(f.group);
-    let ax = (g.x / g.n - f.x) * .6, ay = (g.y / g.n - f.y) * .7 + (f.homeY + Math.sin(s.time * 2 + f.phase) * 10 - f.y) * .8;
+    let ax = (g.x / g.n - f.x) * .4, ay = (g.y / g.n - f.y) * .7 + (f.homeY + Math.sin(s.time * 2 + f.phase) * 10 - f.y) * .8;
     for (const other of s.fish) {
       if (other === f || other.caught || other.group !== f.group) continue;
       const dx = f.x - other.x, dy = f.y - other.y, d2 = dx * dx + dy * dy;
-      if (d2 > 0 && d2 < 24 * 24) { ax += dx * 20; ay += dy * 20; }
+      if (d2 > 0 && d2 < 24 * 24) { ax += dx * 8; ay += dy * 20; }
     }
-    let scared = false;
-    for (const threat of [s.player.wet ? { x: px, y: s.player.y, radius: 135 } : null, { ...s.shark, radius: 190 }]) {
+    let scared = false, escapeSpeed = -24;
+    for (const threat of [s.player.wet ? { x: px, y: s.player.y, radius: 135 } : null, s.shark.active ? { ...s.shark, radius: 190 } : null]) {
       if (!threat) continue;
       const dx = f.x - threat.x, dy = f.y - threat.y, d = Math.hypot(dx, dy);
       if (d < threat.radius) {
-        const strength = (1 - d / threat.radius) * 450;
-        ax += (d ? dx / d : 1) * strength; ay += (d ? dy / d : -1) * strength; scared = true;
+        const strength = (1 - d / threat.radius) * 330;
+        // Keep swimming left: escape above/below, or accelerate when danger approaches from behind.
+        const side = Math.abs(dy) < 3 ? (f.phase % 3 < 1.5 ? -1 : 1) : Math.sign(dy);
+        ay += side * strength; escapeSpeed = Math.min(escapeSpeed, -24 - Math.max(0, -dx / Math.max(1, d)) * 50); scared = true;
       }
     }
     if (scared && !f.reacted) { f.reacted = true; s.reactions++; }
+    if (scared && s.player.wet && Math.hypot(f.x - px, f.y - s.player.y) < 135) s.features.swarm = true;
     f.scared = scared;
-    f.vx = clamp((f.vx + ax * dt) * Math.exp(-dt * 1.4), -90, 90);
-    f.vy = clamp((f.vy + ay * dt) * Math.exp(-dt * 1.4), -95, 95);
-    f.x += f.vx * dt; f.y = clamp(f.y + f.vy * dt, WATER + 35, 735);
+    f.vx = clamp(f.vx + (ax + (escapeSpeed - f.vx) * 2) * dt, -80, -12);
+    f.vy = clamp((f.vy + ay * dt) * Math.exp(-dt * 1.4), -90, 90);
+    f.x += f.vx * dt; f.y = clamp(f.y + f.vy * dt, s.water + 35, 735);
+    f.heading += (clamp(-f.vy / 220, -.32, .32) - f.heading) * (1 - Math.exp(-dt * 5));
   }
 }
 export function stepRun(s, dt, holding) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .1) throw new RangeError('Simulation step must be between 0 and 0.1 seconds.');
   if (s.mode !== 'playing') return;
   s.time += dt; s.distance += SPEED * dt; s.invulnerable = Math.max(0, s.invulnerable - dt);
-  const p = s.player;
-  // Same hold/release target speeds and response rates as Pip's original controller, without tricks or cargo drag.
-  const target = holding ? (p.wet ? 240 : 255) : (p.wet ? -210 : -100);
+  s.water = WATER + 28 * Math.sin(s.time * Math.PI / 4 + s.seed % 628 / 100);
+  s.tideOpen = s.water < WATER || s.tideCommitted;
+  const p = s.player, wasWet = p.wet, previousY = p.y;
+  const cargoDrag = Math.min(20, s.caught) * .8;
+  const target = holding ? (p.wet ? 240 + cargoDrag : 255) : (p.wet ? -210 + cargoDrag : -100);
   p.vy += (target - p.vy) * (1 - Math.exp(-dt * (p.wet ? 9 : 6)));
-  const previousY = p.y;
   p.y = clamp(p.y + p.vy * dt, 265, 735); if (p.y === 265 || p.y === 735) p.vy = 0;
-  p.wet = p.y > WATER + 12;
+  p.wet = p.y > s.water + 12;
+  for (const key of ['gulp', 'breach', 'relief']) p[key] = Math.max(0, p[key] - dt);
+  if (p.wet !== wasWet) { s.effects.push({ kind: p.wet ? 'splash' : 'breach', x: p.x, y: s.water, life: 1 }); if (!p.wet) { p.breach = .6; p.relief = .7; } }
   p.breath = clamp(p.breath + (p.wet ? -dt : dt * 4), 0, 8);
+  let px = s.distance + p.x;
+  if (px >= TIDE.left - 22 && px <= TIDE.right + 22) for (const [top, bottom] of [[395, TIDE.top], [TIDE.bottom, 607]]) {
+    if (p.y > top - 18 && p.y < bottom + 18) {
+      p.y = previousY < (top + bottom) / 2 ? top - 18 : bottom + 18; p.vy = 0;
+      if (!s.invulnerable) { s.rockHits++; s.invulnerable = 1.2; message(s, 'Das Riff ist fest. Nutze den Durchgang oder fliege darüber.'); }
+    }
+  }
+  if (px >= TIDE.left - 22 && px < TIDE.right && p.y > TIDE.top && p.y < TIDE.bottom && !s.tidePassed) {
+    if (!s.tideOpen) { s.distance = TIDE.left - p.x - 22; px = s.distance + p.x; s.tideWait += dt; message(s, 'Die Ebbe öffnet den Durchgang. Warten oder oben vorbeifliegen.'); }
+    else s.tideCommitted = true;
+  }
+  if (px > TIDE.right + 22) {
+    s.tidePassed = s.tideCommitted; s.tideBypassed = !s.tideCommitted; s.features.tide = true;
+  }
+  s.shark.active = s.distance > 1400 && s.distance < 2600;
   s.shark.x = 2170 + Math.sin(s.time * .8) * 65; s.shark.y = 620 + Math.sin(s.time * 1.1) * 35;
+  s.boat.active = s.distance > 1900 && s.distance < 2650;
+  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : 'help';
+  s.section = phase;
+  for (const name of ['shark', 'boat', 'rest']) if (phase === name && !s.story.includes(name)) s.story.push(name);
+  if (s.distance > 2800 && s.story.length === 3) s.features.story = true;
   stepSchool(s, dt);
-  const px = s.distance + p.x;
   if (px > ROCK.left - 18 && px < ROCK.right + 18 && p.y > ROCK.top - 18 && p.y < ROCK.bottom + 18) {
     p.y = previousY < (ROCK.top + ROCK.bottom) / 2 ? ROCK.top - 18 : ROCK.bottom + 18; p.vy = 0;
     if (!s.invulnerable) { s.rockHits++; s.score = Math.max(0, s.score - 20); s.invulnerable = 1.2; message(s, 'Vor dem Riff tief abtauchen – oder oben bleiben.'); }
   }
   if (px > ROCK.left && px < ROCK.right && p.y > ROCK.bottom + 18) s.tunnelEntered = true;
-  if (s.tunnelEntered && px > ROCK.right + 30) s.routeComplete = true;
-  if (p.wet && Math.hypot(px - s.shark.x, p.y - s.shark.y) < 62 && !s.invulnerable) {
+  if (px > ROCK.right + 30) { s.features.risk = true; s.routeComplete = s.tunnelEntered; }
+  if (p.wet && s.shark.active && Math.hypot(px - s.shark.x, p.y - s.shark.y) < 62 && !s.invulnerable) {
     s.scares++; s.score = Math.max(0, s.score - 30); s.invulnerable = 1.3; message(s, 'Zu nah am Hai! Oben ist Platz.');
   }
-  for (const f of s.fish) if (!f.caught && p.wet && Math.hypot(f.x - (px + 40), f.y - (p.y - 15)) < 31) {
-    f.caught = true; s.caught++; s.score += f.golden ? 60 : 10;
+  if (s.boat.active && Math.abs(px - s.boat.x) < 95 && p.y > s.water - 25 && p.y < s.water + 66) {
+    p.y = s.water + 78; p.vy = Math.max(0, p.vy);
+    if (!s.invulnerable) { s.rockHits++; s.invulnerable = 1.2; message(s, 'Das Boot versperrt das Auftauchen. Erst darunter hindurch.'); }
+  }
+  if (!s.turtle.helped && p.wet && Math.hypot(px + 30 - s.turtle.x, p.y - s.turtle.y) < 60) {
+    s.turtle.helped = true; p.breath = Math.min(8, p.breath + 3); s.score += 30; p.gulp = .4;
+    message(s, 'Schildkröte befreit! Sie merkt sich deine Hilfe.');
+  }
+  if (s.turtle.helped && s.distance > 5900 && !s.guideRevealed) {
+    s.guideRevealed = true; s.features.help = true; message(s, 'Deine Freundin zeigt dir jetzt ihren sicheren Fischweg!');
+  }
+  for (const f of s.fish) if (!f.caught && (!f.guide || s.guideRevealed) && p.wet && Math.hypot(f.x - (px + 40), f.y - (p.y - 15)) < 31) {
+    f.caught = true; s.caught++; s.score += f.golden ? 60 : f.guide ? 20 : 10; p.gulp = .35;
+    s.effects.push({ kind: 'catch', x: p.x + 40, y: p.y - 15, life: 1 });
+    if (f.guide) s.guideCaught++;
     if (f.golden) { s.gold++; message(s, 'Schatzfisch! +60'); }
   }
-  if (!s.bubbleUsed && Math.hypot(px - 3590, p.y - 680) < 43) { s.bubbleUsed = true; p.breath = Math.min(8, p.breath + 3); message(s, 'Luftblase · +3 Sekunden'); }
+  if (!s.bubbleUsed && Math.hypot(px - 3990, p.y - 680) < 43) { s.bubbleUsed = true; p.breath = Math.min(8, p.breath + 5); message(s, 'Luftblase · +5 Sekunden'); }
+  if (s.guideRevealed && !s.guideBubbleUsed && Math.hypot(px - 6150, p.y - 475) < 43) { s.guideBubbleUsed = true; p.breath = Math.min(8, p.breath + 3); message(s, 'Deine Freundin zeigt dir frische Luft und Fische.'); }
+  s.effects = s.effects.map(e => ({ ...e, life: e.life - dt })).filter(e => e.life > 0);
   if (p.breath <= 0) { s.mode = 'lost'; message(s, 'Pip braucht Luft. Versuch es noch einmal!'); }
   else if (s.distance >= LENGTH) { s.mode = 'won'; if (s.routeComplete && s.gold === 3) s.score += 100; }
 }
 export function demoHolding(s, route = 'safe') {
   const x = s.distance;
   let depth = 265;
-  if (x < 720) depth = 500;
-  else if (x > 1450 && x < 2100) depth = 485;
-  else if (route === 'risk' && x > 2640 && x < 4040) depth = 695;
-  else if (route === 'safe' && x > 3110 && x < 3500) depth = 440;
-  else if (x > 4920 && x < 5450) depth = 485;
+  if (x < 550) depth = 495;
+  else if (x > 760 && x < 1210) depth = 475;
+  else if (x > 1450 && x < 2530) depth = 480;
+  else if (route === 'risk' && x > 3040 && x < 4440) depth = 695;
+  else if (route === 'safe' && x > 3510 && x < 3900) depth = 440;
+  else if (route === 'risk' && x > 5200 && x < 5750) depth = 480;
+  else if (x > 5920 && x < 6500) depth = 485;
   return s.player.y < depth;
 }

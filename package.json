@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 5199 --strictPort",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4199 --strictPort",
-    "test": "node --test tests/model.test.js",
+    "test": "node --test tests/*.test.js",
     "test:browser": "playwright test"
   },
   "dependencies": {

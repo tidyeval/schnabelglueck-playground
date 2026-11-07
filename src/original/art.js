@@ -405,7 +405,7 @@ function nestBase(c, x, water, stage, t) {
 /** @param {Readonly<import('./game.js').GameState>} game Simulation state; drawing must not mutate it. */
 export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = false, fx = null) {
   const menu = mode === 'menu';
-  const water = menu ? 466 : WORLD.water;
+  const water = menu ? 466 : game.waterLevel ?? WORLD.water;
   const d = menu ? (reducedMotion ? 0 : t * 12) : game.distance;
   const motion = reducedMotion ? 0 : t;
   c.clearRect(0, 0, 480, 850);
@@ -652,7 +652,7 @@ export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = fal
       if (item.kind === 'current') drawCurrent(c, item, motion, reducedMotion);
       if (item.kind === 'baitball') drawBaitball(c, item, game.time, night);
       if (night && (item.kind === 'fish' || item.kind === 'jelly')) { c.globalCompositeOperation = 'lighter'; ellipse(c, item.x, item.y - (item.kind === 'jelly' ? 12 : 0), item.kind === 'jelly' ? 44 : 25, item.kind === 'jelly' ? 40 : 17, item.kind === 'jelly' ? '#ff9ee01c' : item.golden ? '#ffd9701c' : '#ffc9a00e'); c.globalCompositeOperation = 'source-over'; }
-      if (item.kind === 'fish') { const gap = Math.hypot(item.x - game.player.x, item.y - game.player.y); fish(c, item.x, item.y, item.golden ? .95 : .8, item.golden, motion, gap < 120 ? 1 - gap / 120 : 0, item.leap > 0 && item.leap < LEAP.duration ? Math.cos(item.leap / LEAP.duration * Math.PI) * .8 : 0); }
+      if (item.kind === 'fish') { const gap = Math.hypot(item.x - game.player.x, item.y - game.player.y); fish(c, item.x, item.y, item.golden ? .95 : .8, item.golden, motion, gap < 120 ? 1 - gap / 120 : 0, item.tilt ?? (item.leap > 0 && item.leap < LEAP.duration ? Math.cos(item.leap / LEAP.duration * Math.PI) * .8 : 0)); }
       if (item.kind === 'puffer') puffer(c, item, motion);
       if (item.kind === 'turtle') turtle(c, item, motion);
       if (item.kind === 'shark') shark(c, item, motion);
