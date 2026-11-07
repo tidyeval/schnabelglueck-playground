@@ -44,21 +44,21 @@ export function beakPosition(player) {
 }
 
 // These points are used by both the illustration and collision detection.
-export function netShape(boat) {
+export function netShape(boat, water = WORLD.water) {
   const age = boat.cast;
   if (age < .85 || age >= 3.25) return null;
   let x, y, width, depth, phase;
   if (age < 1.45) {
     const progress = (age - .85) / .6;
     phase = 'flight'; x = boat.x + 28 - 98 * progress;
-    y = WORLD.water - 75 + 83 * progress - 95 * Math.sin(Math.PI * progress);
+    y = water - 75 + 83 * progress - 95 * Math.sin(Math.PI * progress);
     width = 12 + 40 * progress; depth = 8 + 12 * Math.sin(Math.PI * progress);
     return { phase, x, y, width, depth, points: Array.from({ length: 12 }, (_, i) => ({ x: x + Math.cos(i / 12 * Math.PI * 2) * width, y: y + Math.sin(i / 12 * Math.PI * 2) * depth })) };
   }
   const sink = clamp((age - 1.45) / .65, 0, 1);
   const haul = clamp((age - 2.55) / .7, 0, 1);
   phase = age < 2.1 ? 'sink' : age < 2.55 ? 'soak' : 'haul';
-  x = boat.x - 70 + haul * 82; y = WORLD.water + 8 - haul * 48;
+  x = boat.x - 70 + haul * 82; y = water + 8 - haul * 48;
   width = 52 * (1 - haul * .8); depth = (8 + 164 * sink) * (1 - haul);
   return { phase, x, y, width, depth, points: [[-.82,0],[.82,0],[1,.28],[.85,.8],[.4,1],[-.4,1],[-.85,.8],[-1,.28]].map(([dx, dy]) => ({ x: x + dx * width, y: y + dy * depth })) };
 }

@@ -1,6 +1,8 @@
+import { netShape, hitsNet } from './original/game.js';
 import { dayKey, seedForDay } from './daily.js';
-export const W = 480, H = 850, WATER = 360, LENGTH = 7500, SPEED = 170;
+export const W = 480, H = 850, WATER = 360, LENGTH = 8300, SPEED = 170;
 export const ROCK = { left: 3480, right: 4480, top: 535, bottom: 600 };
+export const HELP = { left: 6080, right: 6400, top: 425, bottom: 560 };
 export const TIDE = { left: 5500, right: 5750, top: 425, bottom: 545 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export function createRun(day = dayKey()) {
@@ -12,10 +14,12 @@ export function createRun(day = dayKey()) {
   }
   for (let i = 0; i < 3; i++) fish.push({ id: `gold-${i}`, group: -1, golden: true, x: 3660 + i * 300, y: 680, caught: false, heading: 0 });
   for (let i = 0; i < 3; i++) fish.push({ id: `guide-${i}`, group: -1, guide: true, x: 6060 + i * 120, y: 470 + i * 10, caught: false, heading: 0 });
+  for (let i = 0; i < 3; i++) fish.push({ id: `flow-${i}`, group: -1, flow: true, x: 7260 + i * 145, y: 480, caught: false, heading: 0 });
   return { mode: 'playing', day, seed, time: 0, distance: 0, water: WATER, player: { x: 110, y: 265, vy: 0, wet: false, breath: 8, gulp: 0, breach: 0, relief: 0 }, fish,
     score: 0, caught: 0, gold: 0, reactions: 0, rockHits: 0, scares: 0, bubbleUsed: false, tunnelEntered: false,
-    routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620, active: false }, boat: { x: 2500 + shift, active: false },
-    turtle: { x: 1110 + shift, y: 470, helped: false }, guideRevealed: false, guideCaught: 0, guideBubbleUsed: false,
+    routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620, active: false }, boat: { x: 2500 + shift, active: false, cast: -1, thrown: false, warned: false, netHits: 0, dodged: false },
+    turtle: { x: 1110 + shift, y: 470, netX: 1030 + shift, netY: 515, helped: false, freedAt: 0 }, guide: { x: 6100, y: 475 }, helpOpen: false, helpEntered: false, helpUsed: false, guideRevealed: false, guideCaught: 0, guideBubbleUsed: false,
+    current: { active: false, entered: false, speed: 0, catches: 0 }, combo: 0, comboUntil: 0, bestCombo: 0,
     tideOpen: false, tideCommitted: false, tidePassed: false, tideBypassed: false, tideWait: 0,
     story: [], section: 'swarm', features: { swarm: false, tide: false, help: false, risk: false, story: false, daily: true }, effects: [] };
 }
@@ -54,10 +58,12 @@ export function stepSchool(s, dt) {
     f.heading += (clamp(-f.vy / 220, -.32, .32) - f.heading) * (1 - Math.exp(-dt * 5));
   }
 }
-export function stepRun(s, dt, holding) {
+export function stepRun(s, dt, holding, stepCurrent) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .1) throw new RangeError('Simulation step must be between 0 and 0.1 seconds.');
   if (s.mode !== 'playing') return;
-  s.time += dt; s.distance += SPEED * dt; s.invulnerable = Math.max(0, s.invulnerable - dt);
+  s.time += dt; stepCurrent?.(s, dt);
+  const helperBoost = s.helpEntered && !s.helpUsed && s.player.y > HELP.top && s.player.y < HELP.bottom ? 45 : 0;
+  s.distance += (SPEED + s.current.speed + helperBoost) * dt; s.invulnerable = Math.max(0, s.invulnerable - dt);
   s.water = WATER + 28 * Math.sin(s.time * Math.PI / 4 + s.seed % 628 / 100);
   s.tideOpen = s.water < WATER || s.tideCommitted;
   const p = s.player, wasWet = p.wet, previousY = p.y;
@@ -70,7 +76,7 @@ export function stepRun(s, dt, holding) {
   if (p.wet !== wasWet) { s.effects.push({ kind: p.wet ? 'splash' : 'breach', x: p.x, y: s.water, life: 1 }); if (!p.wet) { p.breach = .6; p.relief = .7; } }
   p.breath = clamp(p.breath + (p.wet ? -dt : dt * 4), 0, 8);
   let px = s.distance + p.x;
-  if (px >= TIDE.left - 22 && px <= TIDE.right + 22) for (const [top, bottom] of [[395, TIDE.top], [TIDE.bottom, 607]]) {
+  if (px > TIDE.left + 18 && px <= TIDE.right + 22) for (const [top, bottom] of [[395, TIDE.top], [TIDE.bottom, 607]]) {
     if (p.y > top - 18 && p.y < bottom + 18) {
       p.y = previousY < (top + bottom) / 2 ? top - 18 : bottom + 18; p.vy = 0;
       if (!s.invulnerable) { s.rockHits++; s.invulnerable = 1.2; message(s, 'Das Riff ist fest. Nutze den Durchgang oder fliege darüber.'); }
@@ -85,8 +91,19 @@ export function stepRun(s, dt, holding) {
   }
   s.shark.active = s.distance > 1400 && s.distance < 2600;
   s.shark.x = 2170 + Math.sin(s.time * .8) * 65; s.shark.y = 620 + Math.sin(s.time * 1.1) * 35;
-  s.boat.active = s.distance > 1900 && s.distance < 2650;
-  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : 'help';
+  s.boat.active = s.distance > 1900 && s.distance < 2800;
+  if (!s.boat.thrown && s.boat.x - px < 420) { s.boat.thrown = true; s.boat.warned = true; s.boat.cast = 0; message(s, 'Der Fischer holt aus! Tief unter das Netz oder über das Boot.'); }
+  const previousCast = s.boat.cast;
+  if (s.boat.thrown && s.boat.cast < 3.4) s.boat.cast += dt;
+  if (previousCast < .85 && s.boat.cast >= .85) message(s, 'Das Netz fliegt! Tief bleiben oder darüber hinweg.');
+  if (previousCast < 2.55 && s.boat.cast >= 2.55) message(s, 'Er zieht das Netz ein. Gleich ist der Weg wieder frei.');
+  if (s.boat.cast >= 3.25 && !s.boat.dodged) { s.boat.dodged = s.boat.netHits === 0; }
+  const net = netShape(s.boat, s.water);
+  if (net && hitsNet({ x: px, y: p.y }, net) && !s.invulnerable) {
+    s.boat.netHits++; s.score = Math.max(0, s.score - 30); s.invulnerable = 1.3;
+    message(s, 'Vom Netz gestreift! Achte auf die Wurf-Ankündigung.');
+  }
+  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : s.distance < 6800 ? 'help' : 'current';
   s.section = phase;
   for (const name of ['shark', 'boat', 'rest']) if (phase === name && !s.story.includes(name)) s.story.push(name);
   if (s.distance > 2800 && s.story.length === 3) s.features.story = true;
@@ -104,21 +121,37 @@ export function stepRun(s, dt, holding) {
     p.y = s.water + 78; p.vy = Math.max(0, p.vy);
     if (!s.invulnerable) { s.rockHits++; s.invulnerable = 1.2; message(s, 'Das Boot versperrt das Auftauchen. Erst darunter hindurch.'); }
   }
-  if (!s.turtle.helped && p.wet && Math.hypot(px + 30 - s.turtle.x, p.y - s.turtle.y) < 60) {
-    s.turtle.helped = true; p.breath = Math.min(8, p.breath + 3); s.score += 30; p.gulp = .4;
-    message(s, 'Schildkröte befreit! Sie merkt sich deine Hilfe.');
+  if (!s.turtle.helped && p.wet && Math.hypot(px + 40 - s.turtle.netX, p.y - 15 - s.turtle.netY) < 30) {
+    s.turtle.helped = true; s.turtle.freedAt = s.time; p.breath = Math.min(8, p.breath + 3); s.score += 30; p.gulp = .42;
+    message(s, 'Netzfaden gelöst! Deine neue Freundin ist frei. +30');
   }
-  if (s.turtle.helped && s.distance > 5900 && !s.guideRevealed) {
-    s.guideRevealed = true; s.features.help = true; message(s, 'Deine Freundin zeigt dir jetzt ihren sicheren Fischweg!');
+  if (s.turtle.helped && s.distance > 5750) {
+    if (!s.guideRevealed) message(s, 'Da ist deine Freundin! Folge ihr zum Muscheltor.');
+    s.guideRevealed = true; s.guide.x = Math.min(HELP.right + 100, px + 160); s.guide.y = 470 + Math.sin(s.time * 2) * 10;
+    if (s.guide.x > HELP.left && !s.helpOpen) { s.helpOpen = true; message(s, 'Sie öffnet das Muscheltor! Folge ihr durch die Fisch-Abkürzung.'); }
+  }
+  if (px >= HELP.left - 22 && px < HELP.right + 22) {
+    if (px > HELP.left + 18 && p.y > 395 - 18 && p.y < HELP.top + 18) { p.y = previousY < 410 ? 377 : HELP.top + 18; p.vy = 0; }
+    if (px > HELP.left + 18 && p.y > HELP.bottom - 18 && p.y < 620 + 18) { p.y = previousY < 590 ? HELP.bottom - 18 : 638; p.vy = 0; }
+    if (p.y > HELP.top && p.y < HELP.bottom) {
+      if (!s.helpOpen) { s.distance = HELP.left - p.x - 22; message(s, 'Das Muscheltor ist zu. Fliege oben vorbei – oder hilf ihr beim nächsten Mal.'); }
+      else s.helpEntered = true;
+    }
+  }
+  if (s.helpEntered && px > HELP.right + 22 && !s.helpUsed) {
+    s.helpUsed = true; s.features.help = true; s.score += 50; message(s, 'Tierfreundin-Abkürzung geschafft! +50');
   }
   for (const f of s.fish) if (!f.caught && (!f.guide || s.guideRevealed) && p.wet && Math.hypot(f.x - (px + 40), f.y - (p.y - 15)) < 31) {
-    f.caught = true; s.caught++; s.score += f.golden ? 60 : f.guide ? 20 : 10; p.gulp = .35;
-    s.effects.push({ kind: 'catch', x: p.x + 40, y: p.y - 15, life: 1 });
+    f.caught = true; s.caught++; s.combo = s.time < s.comboUntil ? s.combo + 1 : 1; s.comboUntil = s.time + 1.2; s.bestCombo = Math.max(s.bestCombo, s.combo);
+    const points = (f.golden ? 60 : f.guide ? 20 : 10) + Math.min(4, s.combo - 1) * 2;
+    s.score += points; p.gulp = .42;
+    s.effects.push({ kind: 'catch', x: p.x + 40, y: p.y - 15, life: 1, label: `+${points}${s.combo > 1 ? ` · ${s.combo}er Fangserie` : ''}` });
     if (f.guide) s.guideCaught++;
+    if (f.flow) s.current.catches++;
     if (f.golden) { s.gold++; message(s, 'Schatzfisch! +60'); }
   }
   if (!s.bubbleUsed && Math.hypot(px - 3990, p.y - 680) < 43) { s.bubbleUsed = true; p.breath = Math.min(8, p.breath + 5); message(s, 'Luftblase · +5 Sekunden'); }
-  if (s.guideRevealed && !s.guideBubbleUsed && Math.hypot(px - 6150, p.y - 475) < 43) { s.guideBubbleUsed = true; p.breath = Math.min(8, p.breath + 3); message(s, 'Deine Freundin zeigt dir frische Luft und Fische.'); }
+  if (s.guideRevealed && !s.guideBubbleUsed && Math.hypot(px - 6150, p.y - 475) < 43) { s.guideBubbleUsed = true; p.breath = Math.min(8, p.breath + 4); message(s, 'Deine Freundin zeigt dir frische Luft und Fische.'); }
   s.effects = s.effects.map(e => ({ ...e, life: e.life - dt })).filter(e => e.life > 0);
   if (p.breath <= 0) { s.mode = 'lost'; message(s, 'Pip braucht Luft. Versuch es noch einmal!'); }
   else if (s.distance >= LENGTH) { s.mode = 'won'; if (s.routeComplete && s.gold === 3) s.score += 100; }
@@ -127,11 +160,13 @@ export function demoHolding(s, route = 'safe') {
   const x = s.distance;
   let depth = 265;
   if (x < 550) depth = 495;
-  else if (x > 760 && x < 1210) depth = 475;
-  else if (x > 1450 && x < 2530) depth = 480;
+  else if (x > 650 && x < 1140) depth = 530;
+  else if (x > 1450 && x < 2100) depth = 480;
+  else if (x >= 2100 && x < 2530) depth = 620;
   else if (route === 'risk' && x > 3040 && x < 4440) depth = 695;
   else if (route === 'safe' && x > 3510 && x < 3900) depth = 440;
   else if (route === 'risk' && x > 5200 && x < 5750) depth = 480;
-  else if (x > 5920 && x < 6500) depth = 485;
+  else if (x > 5750 && x < 6500) depth = 485;
+  else if (x > 6900 && x < 7560) depth = 495;
   return s.player.y < depth;
 }

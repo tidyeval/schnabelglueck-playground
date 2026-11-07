@@ -9,11 +9,11 @@ for (const route of ['safe', 'risk']) test(`${route}: complete course, pause and
   await page.locator('#pause').click(); const paused = await snap();
   await page.waitForTimeout(250); expect(await snap()).toEqual(paused);
   await page.locator('#start').click();
-  await page.clock.runFor(53000);
+  await page.clock.runFor(65000);
   await expect.poll(async () => (await snap()).mode, { timeout: 60000 }).toBe('won');
   const s = await snap(); expect(s.reactions).toBeGreaterThan(0); expect(s.rockHits).toBe(0);
   expect(s.gold).toBe(route === 'risk' ? 3 : 0); expect(s.routeComplete).toBe(route === 'risk');
-  expect(Object.values(s.features).every(Boolean)).toBe(true); expect(s.tidePassed).toBe(route === 'risk'); expect(s.guideCaught).toBeGreaterThan(0);
+  expect(Object.values(s.features).every(Boolean)).toBe(true); expect(s.tidePassed).toBe(route === 'risk'); expect(s.guideCaught).toBeGreaterThan(0); expect(s.helpUsed).toBe(true); expect(s.boat.warned).toBe(true); expect(s.boat.netHits).toBe(0); expect(s.current.entered).toBe(true); expect(s.current.catches).toBeGreaterThan(0); expect(s.bestCombo).toBeGreaterThan(1); expect(s.presentation.audioReady).toBe(true);
   await expect(page.locator('#daily')).toContainText(`Dein Rekord: ${s.score}`);
   expect(errors).toEqual([]); mkdirSync('results', { recursive: true });
   await page.screenshot({ path: `results/${route}-${info.project.name}.png`, fullPage: true });
@@ -34,4 +34,19 @@ test('real keyboard hold/release and narrow touch layout', async ({ browser }) =
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await expect.poll(() => page.evaluate(() => window.playground.snapshot().mode)).toBe('paused');
   await context.close();
+});
+
+for (const depth of [470, 530]) test(`keyboard rescue at depth ${depth}: ring is a deliberate target`, async ({ page }) => {
+  await page.clock.install(); await page.goto(''); await page.locator('#start').click();
+  let down = false, s;
+  for (let i = 0; i < 85; i++) {
+    s = await page.evaluate(() => window.playground.snapshot());
+    const target = s.distance < 550 ? 495 : depth, next = s.player.y < target;
+    if (next !== down) { await page.keyboard[next ? 'down' : 'up']('Space'); down = next; }
+    await page.clock.runFor(100);
+  }
+  await page.keyboard.up('Space'); s = await page.evaluate(() => window.playground.snapshot());
+  expect(s.turtle.helped).toBe(depth === 530); expect(s.demo).toBe(null);
+  expect(s.presentation.soundsPlayed).toBeGreaterThan(0);
+  for (let i = 0; i < 6; i++) { await page.locator('#sound').click(); await expect(page.locator('#sound')).toHaveAttribute('aria-pressed', String(i % 2 === 0)); }
 });

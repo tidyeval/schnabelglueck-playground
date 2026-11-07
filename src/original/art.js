@@ -204,7 +204,7 @@ function shark(c, item, t) {
   c.restore();
 }
 function turtle(c, item, t) {
-  c.save(); c.translate(item.x, item.y);
+  c.save(); c.translate(item.x, item.y); if (item.facingRight) c.scale(-1, 1);
   const tuck = Math.min(1, (item.reaction || 0) * 3);
   const paddle = Math.sin(t * 3 + item.baseY) * .35 * (1 - tuck);
   ellipse(c, 24, -18, 22, 8, '#76aa8d', -.5 - paddle);
@@ -256,7 +256,7 @@ function boat(c, item, water, t, sleepy = false) {
   const bob = Math.sin(t * 2) * 2;
   const angry = item.reaction > 0 && item.reactionKind === 'angry';
   const hand = item.reaction > 0 ? { x: (angry ? 70 : 16) + (angry ? Math.sin(t * 28) * 11 : 0), y: -78 } : resting ? { x: 17, y: -38 } : hauling ? { x: -10 + Math.sin(t * 12) * 7, y: -44 } : { x: 16 + windup * 19 - throwing * 65, y: -40 - windup * 45 + throwing * 36 };
-  const net = netShape(item);
+  const net = netShape(item, water);
   if (age >= 0 && age < 1.45) {
     c.save(); c.setLineDash([5, 6]); c.strokeStyle = '#fff1b4'; c.lineWidth = 2;
     c.beginPath(); c.ellipse(item.x - 70, water + 5, 51, 8, 0, 0, TAU); c.stroke(); c.restore();
@@ -300,6 +300,10 @@ function boat(c, item, water, t, sleepy = false) {
   c.strokeStyle = '#dc8660'; c.lineWidth = 5;
   for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; c.beginPath(); c.arc(30, 11, 10, a - .2, a + .2); c.stroke(); }
   c.fillStyle = '#ffebc3'; c.font = "bold 7px 'Trebuchet MS'"; c.textAlign = 'center'; c.fillText('LÜTTE LOTTE', -24, 14);
+  // The seated legs connect the coat to the deck; the nearer boot rests behind the gunwale.
+  path(c, '#446e78', p => { p.moveTo(-28, -34); p.quadraticCurveTo(-46, -29, -43, -17); p.lineTo(-29, -12); p.lineTo(-16, -25); p.lineTo(7, -25); p.lineTo(16, -12); p.lineTo(27, -16); p.lineTo(11, -35); p.closePath(); }, '#345a67', 1.2);
+  for (const x of [-36, 20]) { path(c, '#405b57', p => { p.moveTo(x - 5, -19); p.lineTo(x + 4, -19); p.lineTo(x + 6, -9); p.lineTo(x - 10, -9); p.quadraticCurveTo(x - 14, -14, x - 5, -14); p.closePath(); }); }
+  path(c, '#b48b61', p => p.roundRect(-46, -29, 65, 6, 2));
   // Pip gets an expressive opponent: raincoat, rosy nose and a very serious moustache.
   c.save(); c.translate(-7, -17); c.rotate(hauling && !item.hit ? Math.sin(t * 12) * .06 : -windup * (1 - throwing) * .08);
   path(c, gradient(c, -45, 2, coat, shade), p => { p.moveTo(-22, 0); p.lineTo(-20, -32); p.quadraticCurveTo(-18, -48, -1, -47); p.quadraticCurveTo(19, -48, 23, -30); p.lineTo(25, 0); p.closePath(); }, shade, 1);
@@ -667,7 +671,7 @@ export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = fal
       gulp: game.feeding ? .2 : p.gulp, breach: p.breach, cargo: game.cargo, breath: p.breath, reducedMotion,
       expression: {
         energy: game.energy, hurt: p.hurt, relief: p.relief, bump: p.bump, confused: p.confused, kick: p.kick,
-        squash: fx?.squash, stretch: game.feeding ? 0 : clamp(Math.abs(p.vy) / 3400, 0, .1),
+        squash: fx?.squash ?? p.catchSquash, stretch: game.feeding ? 0 : clamp(Math.abs(p.vy) / 3400, 0, .1),
         sparkle: fx?.sparkle, shiver: fx?.shiver,
         fish: game.items.find(i => i.kind === 'fish' && i.x > p.x + 30 && i.x < p.x + 140),
         nest: game.feeding || game.settling || game.items.some(i => i.kind === 'nest' && Math.abs(i.x - p.x) < 260),

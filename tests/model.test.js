@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRun, stepRun, stepSchool, demoHolding, ROCK, TIDE } from '../src/model.js';
+import { createRun, stepRun, stepSchool, demoHolding, ROCK, TIDE, HELP } from '../src/model.js';
 
 for (const dt of [1 / 60, 1 / 120]) for (const route of ['safe', 'risk']) test(`${route} route is finishable at ${Math.round(1 / dt)} Hz`, () => {
   const s = createRun('2026-11-07');
@@ -52,13 +52,35 @@ test('closed tide passage waits; opening commits passage without trapping Pip', 
   s.time += 4; stepRun(s, .02, false); assert.equal(s.tideCommitted, true); assert.ok(s.distance > before);
   s.time += 4; stepRun(s, .02, true); assert.equal(s.tideOpen, true);
 });
-test('later animal help requires the earlier rescue', () => {
-  const missed = createRun('2026-11-07'); missed.distance = 5950; stepRun(missed, .02, false); assert.equal(missed.guideRevealed, false);
-  const helped = createRun('2026-11-07'); helped.player.y = 470; helped.player.wet = true; helped.distance = helped.turtle.x - 140;
-  stepRun(helped, .02, true); assert.equal(helped.turtle.helped, true);
-  helped.distance = 5950; stepRun(helped, .02, false); assert.equal(helped.guideRevealed, true);
-  helped.distance = 6150 - 110; helped.player.y = 475; helped.player.breath = 2; stepRun(helped, .02, false);
-  assert.equal(helped.guideBubbleUsed, true); assert.ok(helped.player.breath > 4);
+test('rescue requires the net knot, not mere proximity to the turtle', () => {
+  const missed = createRun('2026-11-07'); missed.distance = missed.turtle.x - 140; missed.player.y = 470; missed.player.wet = true;
+  stepRun(missed, .02, false); assert.equal(missed.turtle.helped, false);
+  const rescued = createRun('2026-11-07'); rescued.distance = rescued.turtle.netX - 150; rescued.player.y = 530; rescued.player.wet = true;
+  stepRun(rescued, .02, true); assert.equal(rescued.turtle.helped, true); assert.ok(rescued.turtle.freedAt > 0);
+  rescued.distance = 5800; stepRun(rescued, .02, false); assert.equal(rescued.guideRevealed, true);
+  rescued.distance = HELP.left - 80; stepRun(rescued, .02, false); assert.equal(rescued.helpOpen, true); assert.equal(rescued.helpEntered, true);
+  rescued.distance = HELP.right; stepRun(rescued, .02, false); assert.equal(rescued.helpUsed, true); assert.equal(rescued.features.help, true);
+});
+test('unrescued turtle leaves the shortcut closed; upper bypass remains possible', () => {
+  const s = createRun('2026-11-07'); s.distance = HELP.left - 110 - 22; s.player.y = 480; s.player.wet = true;
+  const before = s.distance; stepRun(s, .02, false); assert.equal(s.distance, before); assert.equal(s.helpOpen, false);
+  for (let i = 0; i < 360; i++) stepRun(s, 1 / 120, false);
+  assert.equal(s.mode, 'playing'); assert.ok(s.distance > before + 200); assert.ok(s.player.y < 395); assert.equal(s.helpUsed, false);
+});
+test('net has a warning, a real shared outline, a penalty, and room below', () => {
+  const s = createRun('2026-11-07'); s.distance = s.boat.x - 110 - 419;
+  stepRun(s, .02, false); assert.equal(s.boat.warned, true); assert.ok(s.boat.cast < .85); assert.equal(s.boat.netHits, 0);
+  s.boat.cast = 2.2; s.distance = s.boat.x - 70 - 110; s.player.y = s.water + 90; s.player.wet = true; s.score = 100;
+  stepRun(s, .02, true); assert.equal(s.boat.netHits, 1); assert.ok(s.score < 100);
+  const below = createRun('2026-11-07'); below.boat.thrown = true; below.boat.cast = 2.2; below.distance = below.boat.x - 70 - 110; below.player.y = 620; below.player.wet = true;
+  stepRun(below, .02, true); assert.equal(below.boat.netHits, 0);
+});
+test('quick catches extend a rewarded series; a gap starts a new one', () => {
+  const s = createRun('2026-11-07'); s.player.y = 480; s.player.wet = true;
+  const putFish = () => s.fish.push({ id: 'test', group: -1, x: s.distance + 150, y: 465, caught: false });
+  putFish(); stepRun(s, .02, true); const first = s.score;
+  putFish(); stepRun(s, .02, false); assert.equal(s.combo, 2); assert.ok(s.score - first > first);
+  s.time += 2; putFish(); stepRun(s, .02, true); assert.equal(s.combo, 1); assert.equal(s.bestCombo, 2);
 });
 test('both demonstrations finish the six ideas across a month of daily layouts', () => {
   for (let day = 1; day <= 30; day++) for (const route of ['safe', 'risk']) {
@@ -66,14 +88,14 @@ test('both demonstrations finish the six ideas across a month of daily layouts',
     while (s.mode === 'playing' && s.time < 65) stepRun(s, 1 / 120, demoHolding(s, route));
     assert.equal(s.mode, 'won', `${s.day} ${route}`); assert.equal(s.rockHits, 0); assert.equal(s.scares, 0);
     assert.ok(Object.values(s.features).every(Boolean)); assert.deepEqual(s.story, ['shark', 'boat', 'rest']);
-    assert.ok(s.guideCaught > 0); assert.equal(s.tidePassed, route === 'risk'); assert.equal(s.tideBypassed, route === 'safe');
+    assert.ok(s.guideCaught > 0); assert.equal(s.helpUsed, true); assert.equal(s.boat.netHits, 0); assert.equal(s.boat.dodged, true); assert.equal(s.tidePassed, route === 'risk'); assert.equal(s.tideBypassed, route === 'safe');
     assert.equal(s.gold, route === 'risk' ? 3 : 0);
   }
 });
 
 test('the solid tide reef cannot be swum through above or below the passage', () => {
   for (const y of [410, 560]) {
-    const s = createRun('2026-11-07'); s.distance = TIDE.left - 110; s.player.y = y; s.player.wet = true;
+    const s = createRun('2026-11-07'); s.distance = TIDE.left - 110 + 40; s.player.y = y; s.player.wet = true;
     stepRun(s, .02, true); assert.equal(s.rockHits, 1); assert.ok(s.player.y <= 377 || s.player.y === 443 || s.player.y === 527 || s.player.y >= 625);
   }
 });

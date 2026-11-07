@@ -1,4 +1,4 @@
-const PREFIX = 'schnabel-playground-six:best:';
+const PREFIX = 'schnabel-playground-six:goodies-v1:best:';
 export function dayKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date);
   const get = type => parts.find(p => p.type === type).value;

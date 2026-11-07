@@ -1,7 +1,7 @@
 {
   "source": "tidyeval/schnabel-voll-glueck",
   "revision": "f929927197464f454e8ce17851bd34d0803e883b",
-  "purpose": "Copied original rendering modules with two drawing adapters; the experiment uses its own model.",
+  "purpose": "Copied original renderer and helpers, adapted only in this isolated prototype.",
   "files": [
     {
       "source": "src/art.js",
@@ -27,7 +27,14 @@
   "adaptations": {
     "src/art.js": [
       "Use optional game.waterLevel for the tide animation.",
-      "Use optional item.tilt for smooth fish dodging without reversing."
+      "Use optional item.tilt for smooth fish dodging without reversing.",
+      "Draw a seated lower body and boots for the fisherman.",
+      "Use moving water for the shared fishing-net outline.",
+      "Allow the rescued turtle to face its swimming direction.",
+      "Accept a catch-squash value animated by Phaser Tweens."
+    ],
+    "src/game.js": [
+      "Allow netShape to accept a moving water level; rendering and collision share its polygon."
     ]
   }
 }
