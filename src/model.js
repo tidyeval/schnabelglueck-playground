@@ -1,7 +1,8 @@
+import { WIND, FLIGHT, createFlight, stepFlight } from './flight.js';
 import { MACHINE } from './mechanism.js';
 import { netShape, hitsNet } from './original/game.js';
 import { dayKey, seedForDay } from './daily.js';
-export const W = 480, H = 850, WATER = 360, LENGTH = 11200, SPEED = 170;
+export const W = 480, H = 850, WATER = 360, LENGTH = 14000, SPEED = 170;
 export const CAVE = { left: 9780, right: 10580, top: 495, ceiling: 560, floor: 760 };
 export const ROCK = { left: 3480, right: 4480, top: 535, bottom: 600 };
 export const HELP = { left: 6080, right: 6400, top: 425, bottom: 560 };
@@ -17,12 +18,14 @@ export function createRun(day = dayKey()) {
   for (let i = 0; i < 3; i++) fish.push({ id: `gold-${i}`, group: -1, golden: true, x: 3660 + i * 300, y: 680, caught: false, heading: 0 });
   for (let i = 0; i < 3; i++) fish.push({ id: `guide-${i}`, group: -1, guide: true, x: 6060 + i * 120, y: 470 + i * 10, caught: false, heading: 0 });
   for (let i = 0; i < 3; i++) fish.push({ id: `flow-${i}`, group: -1, flow: true, x: 7260 + i * 145, y: 480, caught: false, heading: 0 });
+  for (let i = 0; i < 4; i++) fish.push({ id: `chain-${i}`, group: -1, chain: true, x: 9060 + i * 60, y: 650, homeY: [595, 585, 600, 590][i], caught: false, heading: 0 });
   for (let i = 0; i < 4; i++) fish.push({ id: `glow-${i}`, group: -1, glowing: true, x: 9900 + i * 160, y: [640, 655, 650, 640][i], caught: false, heading: 0 });
   return { mode: 'playing', day, seed, time: 0, distance: 0, water: WATER, player: { x: 110, y: 265, vy: 0, wet: false, breath: 8, gulp: 0, breach: 0, relief: 0 }, fish,
     score: 0, caught: 0, gold: 0, reactions: 0, rockHits: 0, scares: 0, bubbleUsed: false, tunnelEntered: false,
     routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620, active: false }, boat: { x: 2500 + shift, active: false, cast: -1, thrown: false, warned: false, netHits: 0, dodged: false },
     turtle: { x: 1110 + shift, y: 470, netX: 1030 + shift, netY: 515, helped: false, freedAt: 0 }, guide: { x: 6100, y: 475 }, helpOpen: false, helpEntered: false, helpUsed: false, guideRevealed: false, guideCaught: 0, guideBubbleUsed: false,
-    mechanism: { touched: false, activated: false, open: false, passed: false, buoyX: MACHINE.buoyX, buoyY: 405, angle: 0, weightX: MACHINE.pivotX - MACHINE.arm, weightY: MACHINE.pivotY + 35, gateX: MACHINE.gateX, gateY: MACHINE.gateY },
+    mechanism: { touched: false, activated: false, open: false, passed: false, splashed: false, splashAt: 0, splashX: 0, chainCaught: 0, buoyX: MACHINE.buoyX, buoyY: 405, angle: 0, weightX: MACHINE.pivotX - MACHINE.arm, weightY: MACHINE.pivotY + 35, gateX: MACHINE.gateX, gateY: MACHINE.gateY },
+    wind: { active: false, visited: false, highest: 265 }, flight: createFlight(),
     cave: { entered: false, caught: 0, bubbleUsed: false, passed: false },
     current: { active: false, entered: false, speed: 0, catches: 0 }, combo: 0, comboUntil: 0, bestCombo: 0,
     tideOpen: false, tideCommitted: false, tidePassed: false, tideBypassed: false, tideWait: 0,
@@ -63,23 +66,41 @@ export function stepSchool(s, dt) {
     f.heading += (clamp(-f.vy / 220, -.32, .32) - f.heading) * (1 - Math.exp(-dt * 5));
   }
 }
-export function stepRun(s, dt, holding, stepCurrent) {
+export function stepRun(s, dt, holding, stepCurrent, flightInput = 0, flightTarget = null) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .1) throw new RangeError('Simulation step must be between 0 and 0.1 seconds.');
   if (s.mode !== 'playing') return;
-  s.time += dt; stepCurrent?.(s, dt);
+  s.time += dt; s.water = WATER + 28 * Math.sin(s.time * Math.PI / 4 + s.seed % 628 / 100);
+  if (s.flight.active) {
+    s.distance += SPEED * dt; s.player.breath = Math.min(8, s.player.breath + dt * 4);
+    s.score += stepFlight(s.flight, dt, flightInput, flightTarget);
+    s.section = 'flight';
+    if (s.flight.elapsed > FLIGHT.duration - FLIGHT.transition) { const exit = Math.min(1, (s.flight.elapsed - FLIGHT.duration + FLIGHT.transition) / FLIGHT.transition); s.player.y = s.flight.sideY + (210 - s.flight.sideY) * exit; }
+    if (s.flight.completed) { s.player.y = 210; s.player.vy = 0; s.player.wet = false; message(s, 'Zurück an der Küste! Wieder halten zum Tauchen.'); }
+    return;
+  }
+  const splashed = s.mechanism.splashed;
+  stepCurrent?.(s, dt);
+  if (!splashed && s.mechanism.splashed) { s.effects.push({ kind: 'splash', x: s.mechanism.splashX - s.distance, y: s.water, life: 1 }); message(s, 'Platsch! Das Gegengewicht scheucht Fische aus dem Seegras.'); }
   const helperBoost = s.helpEntered && !s.helpUsed && s.player.y > HELP.top && s.player.y < HELP.bottom ? 45 : 0;
   s.distance += (SPEED + s.current.speed + helperBoost) * dt; s.invulnerable = Math.max(0, s.invulnerable - dt);
-  s.water = WATER + 28 * Math.sin(s.time * Math.PI / 4 + s.seed % 628 / 100);
   s.tideOpen = s.water < WATER || s.tideCommitted;
   const p = s.player, wasWet = p.wet, previousY = p.y;
   const cargoDrag = Math.min(20, s.caught) * .8;
-  const target = holding ? (p.wet ? 240 + cargoDrag : 255) : (p.wet ? -210 + cargoDrag : -100);
+  const inWind = s.distance + p.x > WIND.left && s.distance + p.x < WIND.right && p.y > WIND.top && p.y < WIND.bottom && !p.wet;
+  s.wind.active = inWind; if (inWind) s.wind.visited = true;
+  const glide = Math.max(-100, Math.min(85, (265 - p.y) * 3));
+  const target = (holding ? (p.wet ? 240 + cargoDrag : 255) : (p.wet ? -210 + cargoDrag : glide)) - (inWind ? 150 : 0);
   p.vy += (target - p.vy) * (1 - Math.exp(-dt * (p.wet ? 9 : 6)));
-  p.y = clamp(p.y + p.vy * dt, 265, 735); if (p.y === 265 || p.y === 735) p.vy = 0;
+  p.y = clamp(p.y + p.vy * dt, 160, 735); if (p.y === 160 || p.y === 735) p.vy = 0;
   p.wet = p.y > s.water + 12;
   for (const key of ['gulp', 'breach', 'relief']) p[key] = Math.max(0, p[key] - dt);
   if (p.wet !== wasWet) { s.effects.push({ kind: p.wet ? 'splash' : 'breach', x: p.x, y: s.water, life: 1 }); if (!p.wet) { p.breach = .6; p.relief = .7; } }
   p.breath = clamp(p.breath + (p.wet ? -dt : dt * 4), 0, 8);
+  s.wind.highest = Math.min(s.wind.highest, p.y);
+  if (!s.flight.started && s.distance >= FLIGHT.start && s.distance < FLIGHT.start + 220 && !p.wet && p.y < 255) {
+    s.flight.sideY = p.y; s.flight.started = s.flight.active = true; s.wind.active = false; s.section = 'flight';
+    message(s, 'Perspektivwechsel! Jetzt mit ← → oder Ziehen durch die Ringe.'); return;
+  }
   let px = s.distance + p.x;
   if (px > TIDE.left + 18 && px <= TIDE.right + 22) for (const [top, bottom] of [[395, TIDE.top], [TIDE.bottom, 607]]) {
     if (p.y > top - 18 && p.y < bottom + 18) {
@@ -97,7 +118,7 @@ export function stepRun(s, dt, holding, stepCurrent) {
   s.shark.active = s.distance > 1400 && s.distance < 2600;
   s.shark.x = 2170 + Math.sin(s.time * .8) * 65; s.shark.y = 620 + Math.sin(s.time * 1.1) * 35;
   s.boat.active = s.distance > 1900 && s.distance < 2800;
-  if (!s.boat.thrown && s.boat.x - px < 420) { s.boat.thrown = true; s.boat.warned = true; s.boat.cast = 0; message(s, 'Der Fischer holt aus! Tief unter das Netz oder über das Boot.'); }
+  if (s.boat.active && !s.boat.thrown && s.boat.x - px < 420) { s.boat.thrown = true; s.boat.warned = true; s.boat.cast = 0; message(s, 'Der Fischer holt aus! Tief unter das Netz oder über das Boot.'); }
   const previousCast = s.boat.cast;
   if (s.boat.thrown && s.boat.cast < 3.4) s.boat.cast += dt;
   if (previousCast < .85 && s.boat.cast >= .85) message(s, 'Das Netz fliegt! Tief bleiben oder darüber hinweg.');
@@ -108,7 +129,7 @@ export function stepRun(s, dt, holding, stepCurrent) {
     s.boat.netHits++; s.score = Math.max(0, s.score - 30); s.invulnerable = 1.3;
     message(s, 'Vom Netz gestreift! Achte auf die Wurf-Ankündigung.');
   }
-  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : s.distance < 6800 ? 'help' : s.distance < 7900 ? 'current' : s.distance < 9400 ? 'mechanism' : 'cave';
+  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : s.distance < 6800 ? 'help' : s.distance < 7900 ? 'current' : s.distance < 9400 ? 'mechanism' : s.distance < 10800 ? 'cave' : 'wind';
   s.section = phase;
   for (const name of ['shark', 'boat', 'rest']) if (phase === name && !s.story.includes(name)) s.story.push(name);
   if (s.distance > 2800 && s.story.length === 3) s.features.story = true;
@@ -165,7 +186,8 @@ export function stepRun(s, dt, holding, stepCurrent) {
   }
   if (px > CAVE.right + 25 && s.cave.entered && !s.cave.passed) { s.cave.passed = true; if (s.cave.caught === 4) { s.score += 80; message(s, 'Alle vier Leuchtfische gefunden! +80'); } }
   if (!s.cave.bubbleUsed && Math.hypot(px - 10180, p.y - 650) < 45) { s.cave.bubbleUsed = true; p.breath = Math.min(8, p.breath + 4); message(s, 'Luft in der Leuchthöhle · +4 Sekunden'); }
-  for (const f of s.fish) if (!f.caught && (!f.guide || s.guideRevealed) && p.wet && Math.hypot(f.x - (px + 40), f.y - (p.y - 15)) < 31) {
+  for (const f of s.fish) if (f.chain && s.mechanism.splashed && !f.caught) { f.x -= 18 * dt; f.y += (f.homeY - f.y) * (1 - Math.exp(-dt * 4)); }
+  for (const f of s.fish) if (!f.caught && (!f.chain || s.mechanism.splashed) && (!f.guide || s.guideRevealed) && p.wet && Math.hypot(f.x - (px + 40), f.y - (p.y - 15)) < 31) {
     f.caught = true; s.caught++; s.combo = s.time < s.comboUntil ? s.combo + 1 : 1; s.comboUntil = s.time + 1.2; s.bestCombo = Math.max(s.bestCombo, s.combo);
     const points = (f.golden ? 60 : f.guide ? 20 : 10) + Math.min(4, s.combo - 1) * 2;
     s.score += points; p.gulp = .42;
@@ -173,6 +195,7 @@ export function stepRun(s, dt, holding, stepCurrent) {
     if (f.guide) s.guideCaught++;
     if (f.flow) s.current.catches++;
     if (f.glowing) s.cave.caught++;
+    if (f.chain) s.mechanism.chainCaught++;
     if (f.golden) { s.gold++; message(s, 'Schatzfisch! +60'); }
   }
   if (!s.bubbleUsed && Math.hypot(px - 3990, p.y - 680) < 43) { s.bubbleUsed = true; p.breath = Math.min(8, p.breath + 5); message(s, 'Luftblase · +5 Sekunden'); }
@@ -184,6 +207,7 @@ export function stepRun(s, dt, holding, stepCurrent) {
 export function demoHolding(s, route = 'safe') {
   const x = s.distance;
   let depth = 265;
+  if (x > 10850 && x < 11650) return false;
   if (x < 550) depth = 495;
   else if (x > 650 && x < 1140) depth = 530;
   else if (x > 1450 && x < 2100) depth = 480;

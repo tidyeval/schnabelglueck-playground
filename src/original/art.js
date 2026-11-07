@@ -665,7 +665,7 @@ export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = fal
     }
     const p = game.player;
     c.save();
-    pelican(c, {
+    if (!game.hidePlayer) pelican(c, {
       x: p.feedX ?? p.x, y: p.y, scale: .76, time: motion,
       tilt: game.feeding ? -.12 + Math.sin(motion * 10) * .06 : playerTilt(p),
       outfit, wet: p.wet, happy: game.feeding > 0 || p.gulp > .1 || fx?.joy > 0,

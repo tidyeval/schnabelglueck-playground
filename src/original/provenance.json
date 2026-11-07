@@ -33,7 +33,8 @@
       "Allow the rescued turtle to face its swimming direction.",
       "Accept a catch-squash value animated by Phaser Tweens.",
       "Allow a wider camera viewport without stretching actors.",
-      "Allow cyan luminous fish while retaining the original tail/blink drawing."
+      "Allow cyan luminous fish while retaining the original tail/blink drawing.",
+      "Allow the dedicated frontal drawing to replace the side-view player during the perspective transition."
     ],
     "src/game.js": [
       "Allow netShape to accept a moving water level; rendering and collision share its polygon."

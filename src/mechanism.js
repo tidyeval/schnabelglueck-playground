@@ -1,4 +1,4 @@
-export const MACHINE = { buoyX: 8500, pivotX: 8860, pivotY: 355, arm: 160, gateX: 9020, gateY: 545, gateHeight: 190, floor: 670 };
+export const MACHINE = { buoyX: 8500, pivotX: 8860, pivotY: 280, arm: 160, gateX: 9020, gateY: 545, gateHeight: 190, floor: 670 };
 export function createMechanismStep({ Engine, Bodies, Body, Composite, Constraint, Query }) {
   const worlds = new WeakMap();
   return function stepMechanism(s, dt) {
@@ -39,6 +39,7 @@ export function createMechanismStep({ Engine, Bodies, Body, Composite, Constrain
     if (beam.angle > .05) { Body.setAngle(beam, .05); Body.setAngularVelocity(beam, 0); }
     m.buoyX = buoy.position.x; m.buoyY = buoy.position.y; m.angle = beam.angle;
     m.weightX = weight.position.x; m.weightY = weight.position.y; m.gateX = gate.position.x; m.gateY = gate.position.y;
+    if (m.activated && !m.splashed && weight.position.y + 22 >= s.water) { m.splashed = true; m.splashAt = s.time; m.splashX = weight.position.x; }
     m.open = m.activated && gate.position.y < MACHINE.gateY - 95;
   };
 }

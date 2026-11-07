@@ -1,3 +1,6 @@
+import { WIND, FLIGHT, demoFlightTarget } from './flight.js';
+import { drawFlight } from './flight-art.js';
+import { cameraTarget } from './camera.js';
 import Phaser from 'phaser';
 import './style.css';
 import { drawWorld, fish as drawFish } from './original/art.js';
@@ -15,6 +18,8 @@ const stepPhysics = (s, dt) => { stepCurrent(s, dt); stepMechanism(s, dt); };
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ratio = Math.min(devicePixelRatio || 1, 2), original = createGame(() => .5, 0);
 let scene, run = createRun(), mode = 'menu', holding = false, demo = null;
+let flightPointer = null;
+const flightLanding = new URLSearchParams(location.search).get('test') === 'flight';
 let muted = false, soundError = '';
 let best = readBest(run.day), storageError = '';
 function showMode(next) {
@@ -23,18 +28,18 @@ function showMode(next) {
     if (next === 'playing') { scene.tweens.resumeAll(); scene.bubbles.resume(); }
     else { scene.tweens.pauseAll(); scene.bubbles.pause(); scene.sound.stopAll(); }
   }
-  if (next === 'won') {
+  if (next === 'won' && !run.practice) {
     try { best = saveBest(run.day, run.score); } catch { storageError = 'Tagesrekord konnte hier nicht gespeichert werden.'; }
   }
   $('overlay').hidden = next === 'playing'; $('pause').disabled = !['playing', 'paused'].includes(next);
   $('pause').textContent = next === 'paused' ? '▶' : 'Ⅱ'; $('pause').setAttribute('aria-label', next === 'paused' ? 'Fortsetzen' : 'Pause');
-  $('title').innerHTML = next === 'won' ? 'Pip ist angekommen.' : next === 'lost' ? 'Erst mal Luft holen.' : next === 'paused' ? 'Eine kleine Pause.' : 'Neue Wege.<br>Neue Entdeckungen.';
-  $('description').textContent = next === 'won' ? `${run.caught} Fische · ${run.gold}/3 Schatzfische · ${run.score} Punkte. ${run.helpUsed ? 'Tierfreundin-Abkürzung geschafft!' : run.turtle.helped ? 'Deine Freundin wartet am Muscheltor. Folge ihr beim nächsten Versuch.' : 'Hast du die gefangene Schildkröte entdeckt?'} ${run.tidePassed ? 'Gezeitenpassage geschafft!' : 'Du hast die Gezeiten oben umflogen.'}`
+  $('title').innerHTML = next === 'menu' && flightLanding ? 'Wind & Perspektive.<br>Ein kurzer Flugtest.' : next === 'won' ? 'Pip ist angekommen.' : next === 'lost' ? 'Erst mal Luft holen.' : next === 'paused' ? 'Eine kleine Pause.' : 'Neue Wege.<br>Neue Entdeckungen.';
+  $('description').textContent = next === 'won' && run.practice ? `${run.flight.passed}/5 Ringe getroffen. Noch einmal probieren oder den ganzen Parcours spielen.` : next === 'menu' && flightLanding ? 'Der Wind hebt Pip an. Nach dem Schwenk mit ← → oder A/D steuern – auf dem Bildschirm ziehen. Danach kehrt die Seitenansicht zurück.' : next === 'won' ? `${run.caught} Fische · ${run.gold}/3 Schatzfische · ${run.score} Punkte. ${run.helpUsed ? 'Tierfreundin-Abkürzung geschafft!' : run.turtle.helped ? 'Deine Freundin wartet am Muscheltor. Folge ihr beim nächsten Versuch.' : 'Hast du die gefangene Schildkröte entdeckt?'} ${run.tidePassed ? 'Gezeitenpassage geschafft!' : 'Du hast die Gezeiten oben umflogen.'}`
     : next === 'lost' ? 'Tauche zwischendurch auf. Unter dem Riff und auf dem Tierpfad helfen Luftblasen.'
     : next === 'paused' ? 'Dein Versuch wartet auf dich.' : 'Rette die Schildkröte, stoße die gelbe Boje an und folge den Leuchtfischen. Halten taucht ab, Loslassen steigt auf. Die Vorführung zeigt alle Stationen.';
-  $('start').textContent = next === 'paused' ? 'Weiterfliegen' : ['won', 'lost'].includes(next) ? 'Noch eine Runde' : 'Los geht’s';
+  $('start').textContent = next === 'paused' ? 'Weiterfliegen' : ['won', 'lost'].includes(next) ? 'Noch eine Runde' : flightLanding ? 'Flugtest starten' : 'Los geht’s';
 }
-function start(route = null) { run = createRun(); scene.bubbles.killAll(); scene.tweens.killTweensOf(scene.juice); scene.juice.squash = 0; scene.view = { scroll: 0, zoom: 1, maxAhead: 0, minZoom: 1 }; best = readBest(run.day); demo = route; scene.acc = 0; showMode('playing'); $('game').focus(); }
+function start(route = null, practice = false) { run = createRun(); flightPointer = null; if (practice) { run.practice = true; run.distance = FLIGHT.start - 220; run.player.y = 265; } scene.bubbles.killAll(); scene.tweens.killTweensOf(scene.juice); scene.juice.squash = 0; scene.view = { scroll: 0, y: 0, zoom: 1, maxAhead: 0, minZoom: 1 }; best = readBest(run.day); demo = route; scene.acc = 0; showMode('playing'); $('game').focus(); }
 function pause() { if (mode === 'playing') showMode('paused'); else if (mode === 'paused') { scene.acc = 0; showMode('playing'); $('game').focus(); } }
 function label(c, text, x, y, colour = '#fff3ca') {
   if (x < -400 || x > W + 100) return;
@@ -47,13 +52,13 @@ function bubble(c, x, y) {
 }
 function draw(c) {
   const sx = x => x - run.distance, p = run.player;
-  const items = run.fish.filter(f => !f.glowing && !f.caught && (!f.guide || run.guideRevealed)).map(f => ({ ...f, kind: 'fish', x: sx(f.x), tilt: f.heading }));
+  const items = run.fish.filter(f => !f.glowing && !f.caught && (!f.chain || run.mechanism.splashed) && (!f.guide || run.guideRevealed)).map(f => ({ ...f, kind: 'fish', x: sx(f.x), tilt: f.heading }));
   if (run.shark.active) items.push({ ...run.shark, kind: 'shark', x: sx(run.shark.x), baseY: run.shark.y, phase: 'dash', reaction: 0 });
   if (run.boat.active) items.push({ kind: 'boat', x: sx(run.boat.x), cast: run.boat.cast, look: 0, hit: false });
   const freed = run.turtle.helped ? Math.min(2, run.time - run.turtle.freedAt) : 0;
   const tx = run.guideRevealed ? run.guide.x : run.turtle.x + freed * 45, ty = run.guideRevealed ? run.guide.y : run.turtle.y - freed * 25;
   items.push({ kind: 'turtle', x: sx(tx), y: ty, baseY: ty, reaction: 0, facingRight: run.turtle.helped });
-  drawWorld(c, { ...original, viewWidth: VIEW_WIDTH, distance: run.distance, time: run.time, waterLevel: run.water, cargo: Math.min(20, run.caught), items,
+  drawWorld(c, { ...original, hidePlayer: run.flight.active, viewWidth: VIEW_WIDTH, distance: run.distance, time: run.time, waterLevel: run.water, cargo: Math.min(20, run.caught), items,
     player: { ...original.player, ...p, catchSquash: scene?.juice.squash || 0, hurt: run.invulnerable } }, 'playing', run.time, 'classic', run.effects, reduced);
   const rx = sx(ROCK.left);
   c.fillStyle = '#376c6d'; c.beginPath(); c.roundRect(rx, ROCK.top, ROCK.right - ROCK.left, ROCK.bottom - ROCK.top, 20); c.fill();
@@ -97,7 +102,7 @@ function draw(c) {
   } c.restore(); label(c, 'STRÖMUNG → MITTAUCHEN FÜR SCHUB & FISCHE', cx - 180, CURRENT.top - 22);
   if (run.boat.thrown && run.boat.cast < .85) label(c, '⚠ DER FISCHER HOLT AUS · TIEF ODER DARÜBER', 15, 135, '#ffe09b');
   drawNewStations(c, sx);
-  const names = { swarm: '01 · Schwarm & kleine Rettung', shark: '02 · Der Hai scheucht Fische auf', boat: '03 · Unter dem Boot hindurch', rest: '04 · Durchatmen', risk: '05 · Sicherer Weg oder Schatz?', tide: '06 · Die Gezeiten-Passage', help: '07 · Deine Freundin hilft zurück', current: '08 · Mit der Strömung auf Fischfang', mechanism: '09 · Boje, Seil & Gegengewicht', cave: '10 · Folge den Leuchtfischen' };
+  const names = { swarm: '01 · Schwarm & kleine Rettung', shark: '02 · Der Hai scheucht Fische auf', boat: '03 · Unter dem Boot hindurch', rest: '04 · Durchatmen', risk: '05 · Sicherer Weg oder Schatz?', tide: '06 · Die Gezeiten-Passage', help: '07 · Deine Freundin hilft zurück', current: '08 · Mit der Strömung auf Fischfang', mechanism: '09 · Boje, Seil & Gegengewicht', cave: '10 · Folge den Leuchtfischen', wind: '11 · Der Wind trägt Pip', flight: '12 · Flugperspektive' };
   label(c, names[run.section], 15 + (scene?.view.scroll || 0), 100);
 }
 function drawNewStations(c, sx) {
@@ -142,6 +147,17 @@ function drawNewStations(c, sx) {
   if (!run.cave.bubbleUsed) bubble(c, sx(10180), 650);
   label(c, '↑ OBEN BLEIBT ES HELL', cx + 50, 455);
   label(c, '↓ TIEF TAUCHEN · DIE LEUCHTFISCHE ZEIGEN DEN WEG', cx - 290, 730, '#a5ffed');
+  if (m.splashed && run.time - m.splashAt < 1.8) {
+    const age = run.time - m.splashAt; c.globalAlpha = 1 - age / 1.8; c.strokeStyle = '#e1ffe8'; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(sx(m.splashX), run.water, 15 + age * 85, 4 + age * 12, 0, 0, Math.PI * 2); c.stroke(); c.globalAlpha = 1;
+  }
+  c.strokeStyle = '#76aa8c'; c.lineWidth = 5;
+  for (let i = 0; i < 13; i++) { const x = sx(9010 + i * 20); c.beginPath(); c.moveTo(x, MACHINE.floor); c.quadraticCurveTo(x - 12, 635, x + Math.sin(run.time * 1.5 + i) * 7, 610 + i % 3 * 10); c.stroke(); }
+  const wx = sx(WIND.left), windWidth = WIND.right - WIND.left;
+  c.fillStyle = '#fff8d51f'; c.beginPath(); c.roundRect(wx, WIND.top, windWidth, WIND.bottom - WIND.top, 70); c.fill();
+  c.save(); c.beginPath(); c.rect(wx, WIND.top, windWidth, WIND.bottom - WIND.top); c.clip(); c.strokeStyle = '#fff8df99'; c.lineWidth = 2;
+  for (let i = 0; i < 20; i++) { const x = wx + i * 77 % windWidth, y = WIND.bottom - ((i * 39 + (reduced ? 0 : run.time * 90)) % (WIND.bottom - WIND.top)); c.beginPath(); c.moveTo(x - 6, y + 20); c.quadraticCurveTo(x + 12, y + 10, x + 4, y); c.lineTo(x - 1, y + 7); c.moveTo(x + 4, y); c.lineTo(x + 11, y + 5); c.stroke(); } c.restore();
+  label(c, '↑ AUFWIND · LOSLASSEN UND MITSEGELN', wx - 190, WIND.bottom + 30);
   c.restore();
 }
 class Playground extends Phaser.Scene {
@@ -159,7 +175,7 @@ class Playground extends Phaser.Scene {
     this.worldContext = $('world').getContext('2d');
     this.darkCanvas = document.createElement('canvas'); this.darkCanvas.width = VIEW_WIDTH * ratio; this.darkCanvas.height = VIEW_HEIGHT * ratio;
     this.cameras.main.setOrigin(0, 0);
-    this.view = { scroll: 0, zoom: 1, maxAhead: 0, minZoom: 1 };
+    this.view = { scroll: 0, y: 0, zoom: 1, maxAhead: 0, minZoom: 1 };
     this.bubbles = this.add.particles(0, 0, 'bubble', { speed: { min: 18 * ratio, max: 90 * ratio }, angle: { min: 190, max: 350 }, gravityY: -35 * ratio, lifespan: 550, alpha: { start: .9, end: 0 }, scale: { start: 1, end: .3 }, emitting: false });
     this.glowTexture = this.textures.createCanvas('glow-fish', 90 * ratio, 70 * ratio);
     this.glowFish = Array.from({ length: 4 }, () => {
@@ -167,11 +183,14 @@ class Playground extends Phaser.Scene {
       if (this.game.renderer.type === Phaser.WEBGL) { image.enableFilters(); image.filters.internal.addGlow(0x68ffdc, 2.5, 0, 1, false, 6, 9); }
       return image;
     });
-    this.keys = this.input.keyboard.addKeys({ space: 'SPACE', escape: 'ESC', pause: 'P' }); this.input.keyboard.addCapture(['SPACE']);
+    this.keys = this.input.keyboard.addKeys({ space: 'SPACE', escape: 'ESC', pause: 'P', left: 'LEFT', right: 'RIGHT', a: 'A', d: 'D' }); this.input.keyboard.addCapture(['SPACE', 'LEFT', 'RIGHT']);
     this.input.keyboard.on('keydown-ESC', pause); this.input.keyboard.on('keydown-P', pause);
-    this.input.on('pointerdown', () => { if (mode === 'playing') { holding = true; demo = null; } });
-    this.input.on('pointerup', () => holding = false); this.input.keyboard.on('keydown-SPACE', () => demo = null);
-    $('start').disabled = $('safe').disabled = $('risk').disabled = $('sound').disabled = false; showMode('menu');
+    const steer = pointer => { flightPointer = Math.max(-1, Math.min(1, (pointer.x / ratio - W / 2) / 155)); };
+    this.input.on('pointerdown', pointer => { if (mode === 'playing') { demo = null; if (run.flight.active) steer(pointer); else holding = true; } });
+    this.input.on('pointermove', pointer => { if (mode === 'playing' && run.flight.active && pointer.isDown) steer(pointer); });
+    this.input.on('pointerup', () => { holding = false; flightPointer = null; });
+    for (const key of ['LEFT', 'RIGHT', 'A', 'D']) this.input.keyboard.on(`keydown-${key}`, () => { if (mode === 'playing' && run.flight.active) { demo = null; flightPointer = null; } }); this.input.keyboard.on('keydown-SPACE', () => demo = null);
+    $('start').disabled = $('safe').disabled = $('risk').disabled = $('sound').disabled = $('flight').disabled = $('flight-demo').disabled = false; showMode('menu');
   }
   playCue(key, rate = 1) {
     if (!muted && !soundError && this.cache.audio.exists(key) && !this.sound.locked && this.sound.play(key, { volume: .28, rate })) this.soundsPlayed++;
@@ -180,12 +199,13 @@ class Playground extends Phaser.Scene {
     if (mode === 'playing') {
       this.acc += Math.min(delta / 1000, .1);
       while (this.acc >= 1 / 120 && mode === 'playing') {
-        const caught = run.caught, rescued = run.turtle.helped, warning = run.boat.warned, flowing = run.current.entered;
-        stepRun(run, 1 / 120, demo ? demoHolding(run, demo) : holding || this.keys.space.isDown, stepPhysics); this.acc -= 1 / 120;
+        const caught = run.caught, rescued = run.turtle.helped, warning = run.boat.warned, flowing = run.current.entered, rings = run.flight.passed;
+        stepRun(run, 1 / 120, demo ? demoHolding(run, demo) : holding || this.keys.space.isDown, stepPhysics, Number(this.keys.right.isDown || this.keys.d.isDown) - Number(this.keys.left.isDown || this.keys.a.isDown), demo ? demoFlightTarget(run.flight) : flightPointer); this.acc -= 1 / 120;
         if (run.caught > caught) {
           if (!reduced) { this.bubbles.explode(8, (run.player.x + 40) * ratio, (run.player.y - 15) * ratio); this.tweens.killTweensOf(this.juice); this.juice.squash = .7; this.tweens.add({ targets: this.juice, squash: 0, duration: 350, ease: 'Back.Out' }); }
           this.playCue('catch', Math.min(1.5, 1 + (run.combo - 1) * .05));
         }
+        if (run.flight.passed > rings) this.playCue('catch', 1.2);
         if (!rescued && run.turtle.helped) this.playCue('rescue');
         if (!warning && run.boat.warned) this.playCue('net');
         if (!flowing && run.current.entered) this.playCue('flow');
@@ -193,21 +213,26 @@ class Playground extends Phaser.Scene {
       }
     }
     if (mode === 'playing') {
-      const approaching = (run.distance > 2900 && run.distance < 4500) || (run.distance > 7900 && run.distance < 10700);
-      const ahead = reduced ? 0 : approaching ? 35 : run.current.active ? 20 : 0;
-      const zoom = reduced ? 1 : approaching ? .96 : 1;
+      const target = cameraTarget(run, reduced), ahead = target.scroll, zoom = target.zoom;
       const ease = 1 - Math.exp(-Math.min(delta / 1000, .1) * 2.5);
-      this.view.scroll += (ahead - this.view.scroll) * ease; this.view.zoom += (zoom - this.view.zoom) * ease;
+      this.view.scroll += (ahead - this.view.scroll) * ease; this.view.zoom += (zoom - this.view.zoom) * ease; this.view.y += (target.y - this.view.y) * ease;
       this.view.maxAhead = Math.max(this.view.maxAhead, this.view.scroll); this.view.minZoom = Math.min(this.view.minZoom, this.view.zoom);
     }
-    this.cameras.main.setScroll(this.view.scroll * ratio, 0).setZoom(this.view.zoom);
+    this.cameras.main.setScroll(this.view.scroll * ratio, this.view.y * ratio).setZoom(this.view.zoom);
     const camera = this.cameras.main, c = this.worldContext;
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, W * ratio, H * ratio);
-    c.setTransform(ratio * camera.zoom, 0, 0, ratio * camera.zoom, -camera.scrollX * camera.zoom, 0); draw(c);
+    c.setTransform(ratio * camera.zoom, 0, 0, ratio * camera.zoom, -camera.scrollX * camera.zoom, -camera.scrollY * camera.zoom); draw(c);
     c.fillStyle = '#81a996'; c.fillRect(0, H, VIEW_WIDTH, VIEW_HEIGHT - H);
+    c.setTransform(ratio, 0, 0, ratio, 0, 0); drawFlight(c, run.flight, run.time, reduced, run.player.y);
+    $('air').hidden = run.flight.active;
+    const inputLabel = run.flight.active ? 'Flugpassage: Pfeiltasten links rechts oder A und D. Auf dem Bildschirm horizontal ziehen. P oder Escape pausiert.' : 'Halten oder Leertaste taucht ab. Loslassen lässt Pip aufsteigen.';
+    if ($('game').getAttribute('aria-label') !== inputLabel) $('game').setAttribute('aria-label', inputLabel);
+    const controlText = run.flight.active ? '← → oder A/D steuern · auf dem Bildschirm ziehen · P/Esc pausiert' : 'Halten ↓ abtauchen · Loslassen ↑ auftauchen · am Computer auch mit Leertaste';
+    if ($('controls').textContent !== controlText) $('controls').textContent = controlText;
+    $('extra-flight').textContent = run.flight.completed ? `✓ ${run.flight.passed}/5 Ringe getroffen` : '○ Aufwind → Schwenk → Ringflug → Seitenansicht';
     const gc = this.glowTexture.context; gc.setTransform(ratio, 0, 0, ratio, 0, 0); gc.clearRect(0, 0, 90, 70);
     drawFish(gc, 42, 38, .85, false, reduced ? 0 : run.time, 0, 0, true); this.glowTexture.refresh();
-    run.fish.filter(f => f.glowing).forEach((f, i) => this.glowFish[i].setPosition((f.x - run.distance) * ratio, f.y * ratio).setVisible(!f.caught && f.x - run.distance > -80 && f.x - run.distance < VIEW_WIDTH + 80));
+    run.fish.filter(f => f.glowing).forEach((f, i) => this.glowFish[i].setPosition((f.x - run.distance) * ratio, f.y * ratio).setVisible(!run.flight.active && !f.caught && f.x - run.distance > -80 && f.x - run.distance < VIEW_WIDTH + 80));
     $('extra-mechanism').textContent = run.mechanism.passed ? '✓ Tor mit dem Gegengewicht geöffnet' : '○ Gelbe Boje anstoßen';
     $('extra-camera').textContent = this.view.maxAhead > 30 ? '✓ Kamera zeigt mehr vom kommenden Weg' : '○ Vorausblick vor Höhle und Tor';
     $('extra-cave').textContent = run.cave.passed ? `✓ ${run.cave.caught}/4 Leuchtfische gefunden` : '○ Leuchtfisch-Höhle oder heller Weg oben';
@@ -215,18 +240,19 @@ class Playground extends Phaser.Scene {
     const soundLabel = soundError ? 'Ton fehlt' : muted ? 'Ton aus' : 'Ton an';
     if ($('sound').textContent !== soundLabel) $('sound').textContent = soundLabel;
     $('sound').title = soundError;
-    $('score').textContent = `${run.score} Punkte`; $('progress').textContent = `${Math.min(100, Math.floor(run.distance / LENGTH * 100))} %`;
+    $('score').textContent = `${run.score} Punkte`; $('progress').textContent = `${Math.min(100, Math.floor((run.practice ? run.flight.elapsed / FLIGHT.duration : run.distance / LENGTH) * 100))} %`;
     $('breath').value = run.player.breath; $('air').classList.toggle('low', run.player.breath < 2.3);
     $('daily').textContent = `Tagesroute ${run.day} · ${storageError || (best === null ? 'Rekord-Speicherung nicht verfügbar' : `Dein Rekord: ${best}`)}`;
     for (const [key, done] of Object.entries(run.features)) { $(`feature-${key}`).dataset.done = done; $(`status-${key}`).textContent = done ? '✓ Erlebt' : '○ Noch vor dir'; }
-    $('toast').textContent = run.eventUntil > run.time ? run.event : !run.turtle.helped && run.distance > 600 && run.distance < 1100 ? 'Schildkröte im Netz! Tauche zum goldenen Ring – löse ihn mit dem Schnabel.' : demo && mode === 'playing' ? `Vorführung · ${demo === 'risk' ? 'alle Stationen & Schatz' : 'sicherer Weg'} · Tippen zum Übernehmen` : '';
+    $('toast').textContent = run.flight.active ? `${demo ? 'Vorführung · Tippen oder Pfeiltasten übernimmt · ' : ''}${run.flight.passed}/5 Ringe · ← → oder ziehen` : run.eventUntil > run.time ? run.event : !run.turtle.helped && run.distance > 600 && run.distance < 1100 ? 'Schildkröte im Netz! Tauche zum goldenen Ring – löse ihn mit dem Schnabel.' : demo && mode === 'playing' ? `Vorführung · ${demo === 'risk' ? 'alle Stationen & Schatz' : 'sicherer Weg'} · Tippen zum Übernehmen` : '';
   }
 }
 $('sound').onclick = () => { muted = !muted; scene.sound.mute = muted; $('sound').setAttribute('aria-pressed', String(muted)); };
-$('start').onclick = () => mode === 'paused' ? pause() : start();
+$('start').onclick = () => mode === 'paused' ? pause() : start(null, flightLanding || !!run.practice);
+$('flight').onclick = () => start(null, true); $('flight-demo').onclick = () => start('flight', true);
 $('safe').onclick = () => start('safe'); $('risk').onclick = () => start('risk'); $('pause').onclick = pause;
-for (const event of ['pointerup', 'pointercancel']) window.addEventListener(event, () => holding = false);
-function suspend() { holding = false; scene?.input.keyboard.resetKeys(); if (mode === 'playing') pause(); }
+for (const event of ['pointerup', 'pointercancel']) window.addEventListener(event, () => { holding = false; flightPointer = null; });
+function suspend() { holding = false; flightPointer = null; scene?.input.keyboard.resetKeys(); if (mode === 'playing') pause(); }
 window.addEventListener('blur', suspend); document.addEventListener('visibilitychange', () => { if (document.hidden) suspend(); });
 window.playground = { snapshot: () => structuredClone({ ...run, mode, demo, presentation: { bubbles: scene?.bubbles.getAliveParticleCount() || 0, soundsPlayed: scene?.soundsPlayed || 0, audioReady: scene?.cache.audio.exists('catch') || false, muted, renderer: scene?.game.renderer.type === Phaser.WEBGL ? 'webgl' : 'canvas', camera: scene ? { ...scene.view, scroll: scene.cameras.main.scrollX / ratio, zoom: scene.cameras.main.zoom } : null, glowFilters: scene?.glowFish.filter(image => image.filters?.internal?.list.length > 0).length || 0 } }) };
 new Phaser.Game({ type: Phaser.WEBGL, canvas: $('game'), width: W * ratio, height: H * ratio, banner: false, transparent: true, scene: Playground });
