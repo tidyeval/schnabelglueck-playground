@@ -1,0 +1,30 @@
+import { test, expect } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+for (const route of ['safe', 'risk']) test(`${route}: complete course, pause and fresh restart`, async ({ page }, info) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto(''); await page.locator(`#${route}`).click();
+  const snap = () => page.evaluate(() => window.playground.snapshot());
+  await expect.poll(async () => (await snap()).player.wet).toBe(true);
+  await page.locator('#pause').click(); const paused = await snap();
+  await page.waitForTimeout(250); expect(await snap()).toEqual(paused);
+  await page.locator('#start').click();
+  await expect.poll(async () => (await snap()).mode, { timeout: 48000 }).toBe('won');
+  const s = await snap(); expect(s.reactions).toBeGreaterThan(0); expect(s.rockHits).toBe(0);
+  expect(s.gold).toBe(route === 'risk' ? 3 : 0); expect(s.routeComplete).toBe(route === 'risk');
+  expect(errors).toEqual([]); mkdirSync('results', { recursive: true });
+  await page.screenshot({ path: `results/${route}-${info.project.name}.png`, fullPage: true });
+  await page.locator('#start').click(); const fresh = await snap(); expect(fresh.caught).toBe(0); expect(fresh.distance).toBeLessThan(30);
+});
+test('real keyboard hold/release and narrow touch layout', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  const page = await context.newPage(); await page.goto(process.env.PLAYGROUND_URL || 'http://127.0.0.1:4199');
+  await page.locator('#start').click();
+  await page.keyboard.down('Space'); await expect.poll(() => page.evaluate(() => window.playground.snapshot().player.y)).toBeGreaterThan(400);
+  await page.keyboard.up('Space'); await expect.poll(() => page.evaluate(() => window.playground.snapshot().player.y)).toBeLessThan(350);
+  await page.locator('#game').scrollIntoViewIfNeeded(); const box = await page.locator('#game').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+  await expect.poll(() => page.evaluate(() => window.playground.snapshot().player.y)).toBeGreaterThan(400); await page.mouse.up();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await expect.poll(() => page.evaluate(() => window.playground.snapshot().mode)).toBe('paused');
+  await context.close();
+});

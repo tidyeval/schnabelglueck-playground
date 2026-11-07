@@ -1,0 +1,27 @@
+{
+  "source": "tidyeval/schnabel-voll-glueck",
+  "revision": "f929927197464f454e8ce17851bd34d0803e883b",
+  "purpose": "Unmodified drawing snapshot; the experiment uses its own small model.",
+  "files": [
+    {
+      "source": "src/art.js",
+      "sha256": "346124f0ae75c7ec11723ef0fe34e10da1ab9eea7c0f16eecdd5ffe24145e432"
+    },
+    {
+      "source": "src/game.js",
+      "sha256": "be93b0bb6ab74ae3c76b4a2c7ad0645ffbece27f64622b0bef60f281d2bce867"
+    },
+    {
+      "source": "src/cute.js",
+      "sha256": "d512c84430d03ba6e5ff5e72b99b529426214b4000eff575979a0582fe0d4bb6"
+    },
+    {
+      "source": "src/scenery.js",
+      "sha256": "a8d1e0ff9f721436c8fcea45e24e9cc5220b2d9b327cebc55cec3a72b5b8c219"
+    },
+    {
+      "source": "src/stages.js",
+      "sha256": "a7fe36dddf49845a1b88ff2a59251486a2c22084abba546bdebe3b7343e0c729"
+    }
+  ]
+}
