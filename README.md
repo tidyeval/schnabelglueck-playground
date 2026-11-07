@@ -6,7 +6,7 @@ An independent six-feature experiment, published separately from the existing ga
 
 **Existing game, unchanged:** https://tidyeval.github.io/schnabel-voll-glueck/
 
-Hold the screen or Space to dive; release to rise. Choose **Alle Stationen & Schatz vorführen** to watch the complete route; touching the canvas or pressing Space takes control. A run takes roughly 80–90 seconds. Pause also happens on focus loss.
+Hold the screen or Space to dive; release to rise. Choose **Alle Stationen & Schatz vorführen** to watch the complete route; touching the canvas or pressing Space takes control. A run takes roughly 70–80 seconds. Pause also happens on focus loss.
 
 ## Six playable ideas
 
@@ -36,21 +36,19 @@ The camera gently reveals more of the route before reefs and these new stations.
 
 The changed course uses a new personal-best namespace; earlier prototype records are preserved but are not compared against the new scoring/route.
 
-## Short perspective flight test
+## Side-view wind and camera
 
-Open https://tidyeval.github.io/schnabelglueck-playground/?test=flight and choose **Flugtest starten**, or use **Perspektivwechsel vorführen**. The short practice automatically takes off, so an early touch/Space press cannot accidentally dive out of the scene. It takes about 17 seconds and never writes a daily record. Both short-test buttons are also available in the normal menu.
+The updraft lifts Pip above normal gliding height. Release to ride it, hold to descend. The entire course stays in side view. The frontal ring-flight experiment and its practice buttons were removed at the owner's request: a forward flight view needed Pip facing away from the camera. Its implementation remains available in Git history; old `?test=flight` URLs simply open the normal course.
 
-An updraft lifts Pip above the normal gliding height. In the designated airborne scene, the side view transitions over 1.35 seconds to an illustrated frontal/oblique 2.5D ring corridor. Steer with Left/Right or A/D, or drag horizontally on the canvas. Releasing a drag keeps the current lane; misses cost a ring but never trap the player. Five rings are projected by depth and judged once at Pip's passing plane. Each successful ring awards 25 points. The final transition returns to the original side illustration and hold/release control. Reduced motion uses a direct scene switch. This is a projected 2.5D experiment, with a new frontal drawing; it is not a full 3D character/world conversion.
+Camera emphasis eases in/out around specific encounters. It shifts down by at most 14 logical pixels when Pip dives at the reefs/cave, looks ahead by at most 32 pixels and zooms no further than 0.965×. Calm intervals keep the baseline view.
 
-The full course includes this scene once near the end if Pip takes the updraft; staying underwater bypasses it. Camera emphasis elsewhere now eases in/out around specific encounters. It shifts down by at most 14 logical pixels when Pip dives at the reefs/cave, looks ahead by at most 32 pixels and zooms no further than 0.965×. Calm intervals keep the baseline view.
-
-The existing buoy mechanism also demonstrates a chain reaction: the counterweight starts above the water, falls through the surface after release, creates a splash/ripple and drives four fish out of a visible sea-grass patch. It reuses the existing mechanism rather than adding a separate coconut interaction. There is no nest-delivery feature.
+The buoy mechanism also demonstrates a chain reaction: the counterweight starts above the water, falls through the surface after release, creates a splash/ripple and drives four fish out of a visible sea-grass patch. There is no nest-delivery feature.
 
 ## Artwork and isolation
 
 Phaser owns the scene, input and update loop. The original vector world draws directly to a 2D canvas. A transparent Phaser WebGL canvas adds native particles and glow, with both layers following the actual Phaser camera transform at up to 2× pixel density: Pip's wing/tail/blink/beak/pouch animation, fish tails, shark, boat, turtle, layered coast, waves, light rays, plants and splash/catch effects. The previous baked 8/6-frame animations and simplified backdrop have been removed. The world draws with a 600-pixel-wide overscan area, easing up to 32 logical pixels ahead and out to 0.965× zoom before obstacles. Sky and water fill the wider viewport without stretching actors. Reduced motion keeps the camera fixed. The new reef/gate/rescue indicators are prototype artwork.
 
-This project has its own Git repository, dependencies, deployment workflow and Pages URL. It has no runtime imports from sibling projects, no service worker and does not read or modify their saved games. Its only storage keys start with `schnabel-playground-six:flight-v1:best:`; blocked storage leaves the game playable and shows a message. Deployment uploads only this repository's `dist` artifact. No account-level Pages configuration changes are made.
+This project has its own Git repository, dependencies, deployment workflow and Pages URL. It has no runtime imports from sibling projects, no service worker and does not read or modify their saved games. Its only storage keys start with `schnabel-playground-six:side-v1:best:`; blocked storage leaves the game playable and shows a message. Deployment uploads only this repository's `dist` artifact. No account-level Pages configuration changes are made.
 
 `src/original` contains copied drawing modules and their original imports. `provenance.json` records the source revision and source hashes. Local adapters accept the moving water level, smooth fish heading, forward-facing helper, fisherman legs and a Phaser-driven catch squash. Wider-view background adapters and the cyan fish palette are also local to the prototype. The copied `netShape` accepts the water level so its rendered outline and collision polygon agree. The live original files are untouched. No soundtrack, private files or original Git history are included.
 
@@ -67,7 +65,7 @@ npx playwright install chromium webkit
 
 Development uses port 5199; production preview uses 4199. `PAGES_BASE=/schnabelglueck-playground/ npm run build` builds the Pages path. `PLAYGROUND_URL=https://tidyeval.github.io/schnabelglueck-playground/ npm run test:browser` checks the deployed site.
 
-Model checks cover both complete routes at 60/120 Hz, a month of daily layouts, fixed fish direction and smooth dodging, shark reactions, rescue-dependent help, tide waiting/entry, air, reef collisions, invalid steps, deterministic dates and isolated personal-best storage. Model checks also exercise the actual Matter current across a month of routes, targeted net-thread rescue, an escapable closed helper gate, warning/net contact, and catch-series scoring. Physics checks also cover the anchored buoy before contact, counterweight/gate motion after a push, finite body values, and escape from a closed gate. Checks also cover five-ring flight at 60/120 Hz, bounded steering, a scene that can be bypassed, practice-record isolation, real arrow keys and dragging, automatic return after misses, and flight pause/resume. Browser checks cover camera preview, reduced motion and pixel-stable pause, deliberate keyboard rescue and a nearby miss, sound loading/playback/muting, both full demonstrations, all six feature states, daily best surviving reload, pause/restart, real keyboard and pointer controls, focus loss, retina sky rendering and a narrow touch layout in Chromium and WebKit. `window.playground.snapshot()` exposes a cloned observation, with no state setters.
+Model checks cover both complete routes at 60/120 Hz, a month of daily layouts, fixed fish direction and smooth dodging, shark reactions, rescue-dependent help, tide waiting/entry, air, reef collisions, invalid steps, deterministic dates and isolated personal-best storage. Model checks also exercise the actual Matter current across a month of routes, targeted net-thread rescue, an escapable closed helper gate, warning/net contact, and catch-series scoring. Physics checks also cover the anchored buoy before contact, counterweight/gate motion after a push, finite body values, and escape from a closed gate. Checks also cover side-view updraft control and the absence of a perspective scene. Browser checks cover camera preview, reduced motion and pixel-stable pause, deliberate keyboard rescue and a nearby miss, sound loading/playback/muting, both full demonstrations, all six feature states, daily best surviving reload, pause/restart, real keyboard and pointer controls, focus loss, retina sky rendering and a narrow touch layout in Chromium and WebKit. `window.playground.snapshot()` exposes a cloned observation, with no state setters.
 
 ## Limits
 

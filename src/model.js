@@ -1,8 +1,8 @@
-import { WIND, FLIGHT, createFlight, stepFlight } from './flight.js';
+import { WIND } from './wind.js';
 import { MACHINE } from './mechanism.js';
 import { netShape, hitsNet } from './original/game.js';
 import { dayKey, seedForDay } from './daily.js';
-export const W = 480, H = 850, WATER = 360, LENGTH = 14000, SPEED = 170;
+export const W = 480, H = 850, WATER = 360, LENGTH = 12300, SPEED = 170;
 export const CAVE = { left: 9780, right: 10580, top: 495, ceiling: 560, floor: 760 };
 export const ROCK = { left: 3480, right: 4480, top: 535, bottom: 600 };
 export const HELP = { left: 6080, right: 6400, top: 425, bottom: 560 };
@@ -25,7 +25,7 @@ export function createRun(day = dayKey()) {
     routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620, active: false }, boat: { x: 2500 + shift, active: false, cast: -1, thrown: false, warned: false, netHits: 0, dodged: false },
     turtle: { x: 1110 + shift, y: 470, netX: 1030 + shift, netY: 515, helped: false, freedAt: 0 }, guide: { x: 6100, y: 475 }, helpOpen: false, helpEntered: false, helpUsed: false, guideRevealed: false, guideCaught: 0, guideBubbleUsed: false,
     mechanism: { touched: false, activated: false, open: false, passed: false, splashed: false, splashAt: 0, splashX: 0, chainCaught: 0, buoyX: MACHINE.buoyX, buoyY: 405, angle: 0, weightX: MACHINE.pivotX - MACHINE.arm, weightY: MACHINE.pivotY + 35, gateX: MACHINE.gateX, gateY: MACHINE.gateY },
-    wind: { active: false, visited: false, highest: 265 }, flight: createFlight(),
+    wind: { active: false, visited: false, highest: 265 },
     cave: { entered: false, caught: 0, bubbleUsed: false, passed: false },
     current: { active: false, entered: false, speed: 0, catches: 0 }, combo: 0, comboUntil: 0, bestCombo: 0,
     tideOpen: false, tideCommitted: false, tidePassed: false, tideBypassed: false, tideWait: 0,
@@ -66,19 +66,10 @@ export function stepSchool(s, dt) {
     f.heading += (clamp(-f.vy / 220, -.32, .32) - f.heading) * (1 - Math.exp(-dt * 5));
   }
 }
-export function stepRun(s, dt, holding, stepCurrent, flightInput = 0, flightTarget = null) {
+export function stepRun(s, dt, holding, stepCurrent) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .1) throw new RangeError('Simulation step must be between 0 and 0.1 seconds.');
   if (s.mode !== 'playing') return;
-  if (s.practice && !s.flight.started) holding = false;
   s.time += dt; s.water = WATER + 28 * Math.sin(s.time * Math.PI / 4 + s.seed % 628 / 100);
-  if (s.flight.active) {
-    s.distance += SPEED * dt; s.player.breath = Math.min(8, s.player.breath + dt * 4);
-    s.score += stepFlight(s.flight, dt, flightInput, flightTarget);
-    s.section = 'flight';
-    if (s.flight.elapsed > FLIGHT.duration - FLIGHT.transition) { const exit = Math.min(1, (s.flight.elapsed - FLIGHT.duration + FLIGHT.transition) / FLIGHT.transition); s.player.y = s.flight.sideY + (210 - s.flight.sideY) * exit; }
-    if (s.flight.completed) { s.player.y = 210; s.player.vy = 0; s.player.wet = false; message(s, 'Zurück an der Küste! Wieder halten zum Tauchen.'); }
-    return;
-  }
   const splashed = s.mechanism.splashed;
   stepCurrent?.(s, dt);
   if (!splashed && s.mechanism.splashed) { s.effects.push({ kind: 'splash', x: s.mechanism.splashX - s.distance, y: s.water, life: 1 }); message(s, 'Platsch! Das Gegengewicht scheucht Fische aus dem Seegras.'); }
@@ -98,10 +89,6 @@ export function stepRun(s, dt, holding, stepCurrent, flightInput = 0, flightTarg
   if (p.wet !== wasWet) { s.effects.push({ kind: p.wet ? 'splash' : 'breach', x: p.x, y: s.water, life: 1 }); if (!p.wet) { p.breach = .6; p.relief = .7; } }
   p.breath = clamp(p.breath + (p.wet ? -dt : dt * 4), 0, 8);
   s.wind.highest = Math.min(s.wind.highest, p.y);
-  if (!s.flight.started && s.distance >= FLIGHT.start && s.distance < FLIGHT.start + 220 && !p.wet && p.y < 255) {
-    s.flight.sideY = p.y; s.flight.started = s.flight.active = true; s.wind.active = false; s.section = 'flight';
-    message(s, 'Perspektivwechsel! Jetzt mit ← → oder Ziehen durch die Ringe.'); return;
-  }
   let px = s.distance + p.x;
   if (px > TIDE.left + 18 && px <= TIDE.right + 22) for (const [top, bottom] of [[395, TIDE.top], [TIDE.bottom, 607]]) {
     if (p.y > top - 18 && p.y < bottom + 18) {
@@ -208,7 +195,7 @@ export function stepRun(s, dt, holding, stepCurrent, flightInput = 0, flightTarg
 export function demoHolding(s, route = 'safe') {
   const x = s.distance;
   let depth = 265;
-  if (x > 10850 && x < 11650) return false;
+  if (x > 10850 && x < 12000) return false;
   if (x < 550) depth = 495;
   else if (x > 650 && x < 1140) depth = 530;
   else if (x > 1450 && x < 2100) depth = 480;

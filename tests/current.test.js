@@ -4,7 +4,6 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { createMechanismStep, MACHINE } from '../src/mechanism.js';
 import { createCurrentStep, CURRENT } from '../src/current.js';
-import { demoFlightTarget } from '../src/flight.js';
 import { createRun, stepRun, demoHolding } from '../src/model.js';
 // The browser supplies Phaser's public Matter namespace; Node loads that same bundled engine without DOM setup.
 const require = createRequire(import.meta.url);
@@ -26,9 +25,9 @@ test('Matter sensor applies a measurable current only underwater, then fades out
 test('both whole routes survive a month of layouts with actual Matter forces', () => {
   for (let day = 1; day <= 30; day++) for (const route of ['safe', 'risk']) {
     const s = createRun(`2026-11-${String(day).padStart(2, '0')}`);
-    while (s.mode === 'playing' && s.time < 100) stepRun(s, 1 / 120, demoHolding(s, route), physics, 0, demoFlightTarget(s.flight));
+    while (s.mode === 'playing' && s.time < 100) stepRun(s, 1 / 120, demoHolding(s, route), physics);
     assert.equal(s.mode, 'won', `${s.day} ${route}`); assert.equal(s.rockHits + s.scares + s.boat.netHits, 0);
-    assert.equal(s.helpUsed, true); assert.equal(s.mechanism.passed, true); assert.equal(s.mechanism.splashed, true); assert.ok(s.mechanism.chainCaught > 0); assert.equal(s.flight.passed, 5); assert.ok(Number.isFinite(s.mechanism.angle)); assert.equal(s.cave.caught, route === 'risk' ? 4 : 0); assert.equal(s.current.entered, true); assert.ok(s.current.catches > 0);
+    assert.equal(s.helpUsed, true); assert.equal(s.mechanism.passed, true); assert.equal(s.mechanism.splashed, true); assert.ok(s.mechanism.chainCaught > 0); assert.ok(Number.isFinite(s.mechanism.angle)); assert.equal(s.cave.caught, route === 'risk' ? 4 : 0); assert.equal(s.current.entered, true); assert.ok(s.current.catches > 0);
     assert.ok(Object.values(s.features).every(Boolean)); assert.equal(s.gold, route === 'risk' ? 3 : 0);
   }
 });
