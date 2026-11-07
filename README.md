@@ -38,7 +38,7 @@ The changed course uses a new personal-best namespace; earlier prototype records
 
 ## Short perspective flight test
 
-Open https://tidyeval.github.io/schnabelglueck-playground/?test=flight and choose **Flugtest starten**, or use **Perspektivwechsel vorführen**. The short practice takes about 17 seconds and never writes a daily record. Both short-test buttons are also available in the normal menu.
+Open https://tidyeval.github.io/schnabelglueck-playground/?test=flight and choose **Flugtest starten**, or use **Perspektivwechsel vorführen**. The short practice automatically takes off, so an early touch/Space press cannot accidentally dive out of the scene. It takes about 17 seconds and never writes a daily record. Both short-test buttons are also available in the normal menu.
 
 An updraft lifts Pip above the normal gliding height. In the designated airborne scene, the side view transitions over 1.35 seconds to an illustrated frontal/oblique 2.5D ring corridor. Steer with Left/Right or A/D, or drag horizontally on the canvas. Releasing a drag keeps the current lane; misses cost a ring but never trap the player. Five rings are projected by depth and judged once at Pip's passing plane. Each successful ring awards 25 points. The final transition returns to the original side illustration and hold/release control. Reduced motion uses a direct scene switch. This is a projected 2.5D experiment, with a new frontal drawing; it is not a full 3D character/world conversion.
 

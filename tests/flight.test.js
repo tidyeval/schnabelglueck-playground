@@ -22,6 +22,9 @@ test('only the designated airborne scene triggers the perspective switch; wind c
   const bypass = createRun('2026-11-07'); bypass.distance = FLIGHT.start - 220; bypass.player.y = 500; bypass.player.wet = true;
   for (let i = 0; i < 400; i++) stepRun(bypass, 1 / 120, true);
   assert.equal(bypass.flight.started, false);
+  const practice = createRun('2026-11-07'); practice.practice = true; practice.distance = FLIGHT.start - 220;
+  for (let i = 0; i < 240; i++) stepRun(practice, 1 / 120, true);
+  assert.equal(practice.flight.active, true);
 });
 test('camera stays calm between encounters, looks gently down at dives and honors reduced motion', () => {
   const s = createRun('2026-11-07');

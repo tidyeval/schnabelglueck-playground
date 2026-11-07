@@ -186,7 +186,7 @@ class Playground extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys({ space: 'SPACE', escape: 'ESC', pause: 'P', left: 'LEFT', right: 'RIGHT', a: 'A', d: 'D' }); this.input.keyboard.addCapture(['SPACE', 'LEFT', 'RIGHT']);
     this.input.keyboard.on('keydown-ESC', pause); this.input.keyboard.on('keydown-P', pause);
     const steer = pointer => { flightPointer = Math.max(-1, Math.min(1, (pointer.x / ratio - W / 2) / 155)); };
-    this.input.on('pointerdown', pointer => { if (mode === 'playing') { demo = null; if (run.flight.active) steer(pointer); else holding = true; } });
+    this.input.on('pointerdown', pointer => { if (mode === 'playing') { demo = null; if (run.flight.active || (run.practice && !run.flight.started)) steer(pointer); else holding = true; } });
     this.input.on('pointermove', pointer => { if (mode === 'playing' && run.flight.active && pointer.isDown) steer(pointer); });
     this.input.on('pointerup', () => { holding = false; flightPointer = null; });
     for (const key of ['LEFT', 'RIGHT', 'A', 'D']) this.input.keyboard.on(`keydown-${key}`, () => { if (mode === 'playing' && run.flight.active) { demo = null; flightPointer = null; } }); this.input.keyboard.on('keydown-SPACE', () => demo = null);
@@ -225,9 +225,9 @@ class Playground extends Phaser.Scene {
     c.fillStyle = '#81a996'; c.fillRect(0, H, VIEW_WIDTH, VIEW_HEIGHT - H);
     c.setTransform(ratio, 0, 0, ratio, 0, 0); drawFlight(c, run.flight, run.time, reduced, run.player.y);
     $('air').hidden = run.flight.active;
-    const inputLabel = run.flight.active ? 'Flugpassage: Pfeiltasten links rechts oder A und D. Auf dem Bildschirm horizontal ziehen. P oder Escape pausiert.' : 'Halten oder Leertaste taucht ab. Loslassen lässt Pip aufsteigen.';
+    const inputLabel = run.practice && !run.flight.started ? 'Der Aufwind startet die Flugpassage. Danach mit Pfeiltasten oder Ziehen steuern.' : run.flight.active ? 'Flugpassage: Pfeiltasten links rechts oder A und D. Auf dem Bildschirm horizontal ziehen. P oder Escape pausiert.' : 'Halten oder Leertaste taucht ab. Loslassen lässt Pip aufsteigen.';
     if ($('game').getAttribute('aria-label') !== inputLabel) $('game').setAttribute('aria-label', inputLabel);
-    const controlText = run.flight.active ? '← → oder A/D steuern · auf dem Bildschirm ziehen · P/Esc pausiert' : 'Halten ↓ abtauchen · Loslassen ↑ auftauchen · am Computer auch mit Leertaste';
+    const controlText = run.practice && !run.flight.started ? 'Aufwind · gleich mit ← → oder Ziehen durch die Ringe' : run.flight.active ? '← → oder A/D steuern · auf dem Bildschirm ziehen · P/Esc pausiert' : 'Halten ↓ abtauchen · Loslassen ↑ auftauchen · am Computer auch mit Leertaste';
     if ($('controls').textContent !== controlText) $('controls').textContent = controlText;
     $('extra-flight').textContent = run.flight.completed ? `✓ ${run.flight.passed}/5 Ringe getroffen` : '○ Aufwind → Schwenk → Ringflug → Seitenansicht';
     const gc = this.glowTexture.context; gc.setTransform(ratio, 0, 0, ratio, 0, 0); gc.clearRect(0, 0, 90, 70);

@@ -78,7 +78,9 @@ test('short frontal flight demo returns to side view, preserves records and paus
   await page.screenshot({ path: `results/flight-completed-${test.info().project.name}.png`, fullPage: true });
 });
 test('frontal flight accepts real arrow keys and dragging, then safely returns even after misses', async ({ page }) => {
-  await page.clock.install(); await page.goto('?test=flight'); await page.locator('#start').click(); await page.clock.runFor(2500);
+  await page.clock.install(); await page.goto('?test=flight'); await page.locator('#start').click(); await page.keyboard.down('Space');
+  const introBox = await page.locator('#game').boundingBox(); await page.mouse.move(introBox.x + introBox.width * .5, introBox.y + introBox.height * .6); await page.mouse.down();
+  await page.clock.runFor(2500); await page.mouse.up(); await page.keyboard.up('Space');
   const snap = () => page.evaluate(() => window.playground.snapshot()); expect((await snap()).flight.active).toBe(true);
   await page.keyboard.down('ArrowLeft'); await page.clock.runFor(450); await page.keyboard.up('ArrowLeft'); expect((await snap()).flight.x).toBeLessThan(-.35);
   await page.keyboard.down('ArrowRight'); await page.clock.runFor(950); await page.keyboard.up('ArrowRight'); expect((await snap()).flight.x).toBeGreaterThan(.3);

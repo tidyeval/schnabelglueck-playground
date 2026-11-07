@@ -69,6 +69,7 @@ export function stepSchool(s, dt) {
 export function stepRun(s, dt, holding, stepCurrent, flightInput = 0, flightTarget = null) {
   if (!Number.isFinite(dt) || dt <= 0 || dt > .1) throw new RangeError('Simulation step must be between 0 and 0.1 seconds.');
   if (s.mode !== 'playing') return;
+  if (s.practice && !s.flight.started) holding = false;
   s.time += dt; s.water = WATER + 28 * Math.sin(s.time * Math.PI / 4 + s.seed % 628 / 100);
   if (s.flight.active) {
     s.distance += SPEED * dt; s.player.breath = Math.min(8, s.player.breath + dt * 4);
