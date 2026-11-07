@@ -12,7 +12,7 @@ test('personal best preserves unrelated data, larger records and other dates', (
   const map = new Map([['original-save', 'keep']]); const storage = { getItem: key => map.get(key) ?? null, setItem: (key, value) => map.set(key, value) };
   assert.equal(readBest('2026-11-07', storage), 0); assert.equal(saveBest('2026-11-07', 250, storage), 250);
   assert.equal(saveBest('2026-11-07', 20, storage), 250); assert.equal(readBest('2026-11-08', storage), 0);
-  assert.equal(map.get('original-save'), 'keep'); assert.ok([...map.keys()].filter(k => k !== 'original-save').every(k => k.startsWith('schnabel-playground-six:goodies-v1:best:')));
+  assert.equal(map.get('original-save'), 'keep'); assert.ok([...map.keys()].filter(k => k !== 'original-save').every(k => k.startsWith('schnabel-playground-six:favorites-v1:best:')));
   assert.throws(() => saveBest('2026-11-07', -1, storage), /non-negative/);
 });
 test('blocked or corrupt storage never prevents playing', () => {

@@ -1,6 +1,8 @@
+import { MACHINE } from './mechanism.js';
 import { netShape, hitsNet } from './original/game.js';
 import { dayKey, seedForDay } from './daily.js';
-export const W = 480, H = 850, WATER = 360, LENGTH = 8300, SPEED = 170;
+export const W = 480, H = 850, WATER = 360, LENGTH = 11200, SPEED = 170;
+export const CAVE = { left: 9780, right: 10580, top: 495, ceiling: 560, floor: 760 };
 export const ROCK = { left: 3480, right: 4480, top: 535, bottom: 600 };
 export const HELP = { left: 6080, right: 6400, top: 425, bottom: 560 };
 export const TIDE = { left: 5500, right: 5750, top: 425, bottom: 545 };
@@ -15,10 +17,13 @@ export function createRun(day = dayKey()) {
   for (let i = 0; i < 3; i++) fish.push({ id: `gold-${i}`, group: -1, golden: true, x: 3660 + i * 300, y: 680, caught: false, heading: 0 });
   for (let i = 0; i < 3; i++) fish.push({ id: `guide-${i}`, group: -1, guide: true, x: 6060 + i * 120, y: 470 + i * 10, caught: false, heading: 0 });
   for (let i = 0; i < 3; i++) fish.push({ id: `flow-${i}`, group: -1, flow: true, x: 7260 + i * 145, y: 480, caught: false, heading: 0 });
+  for (let i = 0; i < 4; i++) fish.push({ id: `glow-${i}`, group: -1, glowing: true, x: 9900 + i * 160, y: [640, 655, 650, 640][i], caught: false, heading: 0 });
   return { mode: 'playing', day, seed, time: 0, distance: 0, water: WATER, player: { x: 110, y: 265, vy: 0, wet: false, breath: 8, gulp: 0, breach: 0, relief: 0 }, fish,
     score: 0, caught: 0, gold: 0, reactions: 0, rockHits: 0, scares: 0, bubbleUsed: false, tunnelEntered: false,
     routeComplete: false, invulnerable: 0, event: '', eventUntil: 0, shark: { x: 2170, y: 620, active: false }, boat: { x: 2500 + shift, active: false, cast: -1, thrown: false, warned: false, netHits: 0, dodged: false },
     turtle: { x: 1110 + shift, y: 470, netX: 1030 + shift, netY: 515, helped: false, freedAt: 0 }, guide: { x: 6100, y: 475 }, helpOpen: false, helpEntered: false, helpUsed: false, guideRevealed: false, guideCaught: 0, guideBubbleUsed: false,
+    mechanism: { touched: false, activated: false, open: false, passed: false, buoyX: MACHINE.buoyX, buoyY: 405, angle: 0, weightX: MACHINE.pivotX - MACHINE.arm, weightY: MACHINE.pivotY + 35, gateX: MACHINE.gateX, gateY: MACHINE.gateY },
+    cave: { entered: false, caught: 0, bubbleUsed: false, passed: false },
     current: { active: false, entered: false, speed: 0, catches: 0 }, combo: 0, comboUntil: 0, bestCombo: 0,
     tideOpen: false, tideCommitted: false, tidePassed: false, tideBypassed: false, tideWait: 0,
     story: [], section: 'swarm', features: { swarm: false, tide: false, help: false, risk: false, story: false, daily: true }, effects: [] };
@@ -103,7 +108,7 @@ export function stepRun(s, dt, holding, stepCurrent) {
     s.boat.netHits++; s.score = Math.max(0, s.score - 30); s.invulnerable = 1.3;
     message(s, 'Vom Netz gestreift! Achte auf die Wurf-Ankündigung.');
   }
-  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : s.distance < 6800 ? 'help' : 'current';
+  const phase = s.distance < 1400 ? 'swarm' : s.distance < 2000 ? 'shark' : s.distance < 2500 ? 'boat' : s.distance < 3250 ? 'rest' : s.distance < 4600 ? 'risk' : s.distance < 5900 ? 'tide' : s.distance < 6800 ? 'help' : s.distance < 7900 ? 'current' : s.distance < 9400 ? 'mechanism' : 'cave';
   s.section = phase;
   for (const name of ['shark', 'boat', 'rest']) if (phase === name && !s.story.includes(name)) s.story.push(name);
   if (s.distance > 2800 && s.story.length === 3) s.features.story = true;
@@ -141,6 +146,25 @@ export function stepRun(s, dt, holding, stepCurrent) {
   if (s.helpEntered && px > HELP.right + 22 && !s.helpUsed) {
     s.helpUsed = true; s.features.help = true; s.score += 50; message(s, 'Tierfreundin-Abkürzung geschafft! +50');
   }
+  const m = s.mechanism;
+  if (px > MACHINE.gateX - 130 && px < MACHINE.gateX + 250 && p.y > MACHINE.floor - 18) { p.y = MACHINE.floor - 18; p.vy = 0; }
+  if (Math.abs(px - m.gateX) < 42 && p.y > m.gateY - MACHINE.gateHeight / 2 - 18 && p.y < m.gateY + MACHINE.gateHeight / 2 + 18) {
+    s.distance = m.gateX - 42 - p.x; px = s.distance + p.x;
+    message(s, 'Tor geschlossen: Stoße die gelbe Boje an – oder fliege oben vorbei.');
+  }
+  if (!m.passed && m.activated && px > MACHINE.gateX + 90 && p.wet && p.y > m.gateY + MACHINE.gateHeight / 2 + 18) {
+    m.passed = true; s.score += 60; message(s, 'Tor geschafft! +60 · Jetzt Luft holen vor der Leuchthöhle.');
+  }
+  if (px > CAVE.left - 18 && px < CAVE.right + 18) {
+    if (p.y > CAVE.top - 18 && p.y < CAVE.ceiling + 18) {
+      p.y = previousY < (CAVE.top + CAVE.ceiling) / 2 ? CAVE.top - 18 : CAVE.ceiling + 18; p.vy = 0;
+      if (!s.invulnerable) { s.rockHits++; s.invulnerable = 1; message(s, 'Für die Leuchtfische vor dem Felsen tief tauchen. Oben bleibt es frei.'); }
+    }
+    if (p.y > CAVE.floor - 18) { p.y = CAVE.floor - 18; p.vy = 0; }
+    if (p.y > CAVE.ceiling + 18) s.cave.entered = true;
+  }
+  if (px > CAVE.right + 25 && s.cave.entered && !s.cave.passed) { s.cave.passed = true; if (s.cave.caught === 4) { s.score += 80; message(s, 'Alle vier Leuchtfische gefunden! +80'); } }
+  if (!s.cave.bubbleUsed && Math.hypot(px - 10180, p.y - 650) < 45) { s.cave.bubbleUsed = true; p.breath = Math.min(8, p.breath + 4); message(s, 'Luft in der Leuchthöhle · +4 Sekunden'); }
   for (const f of s.fish) if (!f.caught && (!f.guide || s.guideRevealed) && p.wet && Math.hypot(f.x - (px + 40), f.y - (p.y - 15)) < 31) {
     f.caught = true; s.caught++; s.combo = s.time < s.comboUntil ? s.combo + 1 : 1; s.comboUntil = s.time + 1.2; s.bestCombo = Math.max(s.bestCombo, s.combo);
     const points = (f.golden ? 60 : f.guide ? 20 : 10) + Math.min(4, s.combo - 1) * 2;
@@ -148,6 +172,7 @@ export function stepRun(s, dt, holding, stepCurrent) {
     s.effects.push({ kind: 'catch', x: p.x + 40, y: p.y - 15, life: 1, label: `+${points}${s.combo > 1 ? ` · ${s.combo}er Fangserie` : ''}` });
     if (f.guide) s.guideCaught++;
     if (f.flow) s.current.catches++;
+    if (f.glowing) s.cave.caught++;
     if (f.golden) { s.gold++; message(s, 'Schatzfisch! +60'); }
   }
   if (!s.bubbleUsed && Math.hypot(px - 3990, p.y - 680) < 43) { s.bubbleUsed = true; p.breath = Math.min(8, p.breath + 5); message(s, 'Luftblase · +5 Sekunden'); }
@@ -168,5 +193,8 @@ export function demoHolding(s, route = 'safe') {
   else if (route === 'risk' && x > 5200 && x < 5750) depth = 480;
   else if (x > 5750 && x < 6500) depth = 485;
   else if (x > 6900 && x < 7560) depth = 495;
+  else if (x > 8100 && x < 8650) depth = s.mechanism.buoyY + 15;
+  else if (s.mechanism.activated && x > 8660 && x < 8980) depth = 610;
+  else if (route === 'risk' && x > 9400 && x < 10470) depth = 660;
   return s.player.y < depth;
 }

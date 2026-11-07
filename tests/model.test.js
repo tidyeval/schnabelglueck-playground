@@ -4,7 +4,7 @@ import { createRun, stepRun, stepSchool, demoHolding, ROCK, TIDE, HELP } from '.
 
 for (const dt of [1 / 60, 1 / 120]) for (const route of ['safe', 'risk']) test(`${route} route is finishable at ${Math.round(1 / dt)} Hz`, () => {
   const s = createRun('2026-11-07');
-  while (s.mode === 'playing' && s.time < 60) stepRun(s, dt, demoHolding(s, route));
+  while (s.mode === 'playing' && s.time < 100) stepRun(s, dt, demoHolding(s, route));
   assert.equal(s.mode, 'won'); assert.ok(s.caught > 0); assert.ok(s.reactions > 0); assert.equal(s.rockHits, 0);
   if (route === 'risk') { assert.equal(s.gold, 3); assert.equal(s.bubbleUsed, true); assert.equal(s.routeComplete, true); }
   else { assert.equal(s.gold, 0); assert.equal(s.tunnelEntered, false); }
@@ -85,7 +85,7 @@ test('quick catches extend a rewarded series; a gap starts a new one', () => {
 test('both demonstrations finish the six ideas across a month of daily layouts', () => {
   for (let day = 1; day <= 30; day++) for (const route of ['safe', 'risk']) {
     const s = createRun(`2026-11-${String(day).padStart(2, '0')}`);
-    while (s.mode === 'playing' && s.time < 65) stepRun(s, 1 / 120, demoHolding(s, route));
+    while (s.mode === 'playing' && s.time < 100) stepRun(s, 1 / 120, demoHolding(s, route));
     assert.equal(s.mode, 'won', `${s.day} ${route}`); assert.equal(s.rockHits, 0); assert.equal(s.scares, 0);
     assert.ok(Object.values(s.features).every(Boolean)); assert.deepEqual(s.story, ['shark', 'boat', 'rest']);
     assert.ok(s.guideCaught > 0); assert.equal(s.helpUsed, true); assert.equal(s.boat.netHits, 0); assert.equal(s.boat.dodged, true); assert.equal(s.tidePassed, route === 'risk'); assert.equal(s.tideBypassed, route === 'safe');

@@ -9,11 +9,11 @@ for (const route of ['safe', 'risk']) test(`${route}: complete course, pause and
   await page.locator('#pause').click(); const paused = await snap();
   await page.waitForTimeout(250); expect(await snap()).toEqual(paused);
   await page.locator('#start').click();
-  await page.clock.runFor(65000);
+  await page.clock.runFor(85000);
   await expect.poll(async () => (await snap()).mode, { timeout: 60000 }).toBe('won');
   const s = await snap(); expect(s.reactions).toBeGreaterThan(0); expect(s.rockHits).toBe(0);
   expect(s.gold).toBe(route === 'risk' ? 3 : 0); expect(s.routeComplete).toBe(route === 'risk');
-  expect(Object.values(s.features).every(Boolean)).toBe(true); expect(s.tidePassed).toBe(route === 'risk'); expect(s.guideCaught).toBeGreaterThan(0); expect(s.helpUsed).toBe(true); expect(s.boat.warned).toBe(true); expect(s.boat.netHits).toBe(0); expect(s.current.entered).toBe(true); expect(s.current.catches).toBeGreaterThan(0); expect(s.bestCombo).toBeGreaterThan(1); expect(s.presentation.audioReady).toBe(true);
+  expect(Object.values(s.features).every(Boolean)).toBe(true); expect(s.tidePassed).toBe(route === 'risk'); expect(s.guideCaught).toBeGreaterThan(0); expect(s.helpUsed).toBe(true); expect(s.boat.warned).toBe(true); expect(s.boat.netHits).toBe(0); expect(s.current.entered).toBe(true); expect(s.current.catches).toBeGreaterThan(0); expect(s.bestCombo).toBeGreaterThan(1); expect(s.presentation.audioReady).toBe(true); expect(s.mechanism.passed).toBe(true); expect(s.cave.caught).toBe(route === 'risk' ? 4 : 0); expect(s.presentation.camera.maxAhead).toBeGreaterThan(30); expect(s.presentation.camera.minZoom).toBeLessThan(.97); expect(s.presentation.glowFilters).toBe(4);
   await expect(page.locator('#daily')).toContainText(`Dein Rekord: ${s.score}`);
   expect(errors).toEqual([]); mkdirSync('results', { recursive: true });
   await page.screenshot({ path: `results/${route}-${info.project.name}.png`, fullPage: true });
@@ -24,8 +24,10 @@ test('real keyboard hold/release and narrow touch layout', async ({ browser }) =
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, deviceScaleFactor: 2 });
   const page = await context.newPage(); await page.goto(process.env.PLAYGROUND_URL || 'http://127.0.0.1:4199');
   await page.locator('#start').click();
-  const sky = await page.locator('#game').evaluate(c => ({ width: c.width, rgba: [...c.getContext('2d').getImageData(500, 200, 1, 1).data] }));
-  expect(sky.width).toBe(960); expect(sky.rgba[0]).toBeGreaterThan(100); expect(sky.rgba[3]).toBe(255);
+  expect(await page.locator('#game').evaluate(c => c.width)).toBe(960);
+  const world = await page.locator('#world').evaluate(c => ({ width: c.width, pixel: [...c.getContext('2d').getImageData(500, 200, 1, 1).data] }));
+  expect(world.width).toBe(960); expect(world.pixel[0]).toBeGreaterThan(100); expect(world.pixel[3]).toBe(255);
+  expect(await page.evaluate(() => window.playground.snapshot().presentation.renderer)).toBe('webgl');
   await page.keyboard.down('Space'); await expect.poll(() => page.evaluate(() => window.playground.snapshot().player.y)).toBeGreaterThan(400);
   await page.keyboard.up('Space'); await expect.poll(() => page.evaluate(() => window.playground.snapshot().player.y)).toBeLessThan(350);
   await page.locator('#game').scrollIntoViewIfNeeded(); const box = await page.locator('#game').boundingBox();
@@ -49,4 +51,16 @@ for (const depth of [470, 530]) test(`keyboard rescue at depth ${depth}: ring is
   expect(s.turtle.helped).toBe(depth === 530); expect(s.demo).toBe(null);
   expect(s.presentation.soundsPlayed).toBeGreaterThan(0);
   for (let i = 0; i < 6; i++) { await page.locator('#sound').click(); await expect(page.locator('#sound')).toHaveAttribute('aria-pressed', String(i % 2 === 0)); }
+});
+
+for (const reducedMotion of ['no-preference', 'reduce']) test(`camera preview and pause with motion preference ${reducedMotion}`, async ({ page }) => {
+  await page.emulateMedia({ reducedMotion }); await page.clock.install(); await page.goto(''); await page.locator('#risk').click();
+  await page.clock.runFor(19500);
+  const view = await page.evaluate(() => window.playground.snapshot().presentation.camera);
+  if (reducedMotion === 'reduce') { expect(view.scroll).toBe(0); expect(view.zoom).toBe(1); }
+  else { expect(view.scroll).toBeGreaterThan(25); expect(view.zoom).toBeLessThan(.98); }
+  await page.locator('#pause').click(); const paused = await page.evaluate(() => window.playground.snapshot());
+  const before = await page.locator('#game').screenshot(); await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.playground.snapshot())).toEqual(paused);
+  expect(await page.locator('#game').screenshot()).toEqual(before);
 });

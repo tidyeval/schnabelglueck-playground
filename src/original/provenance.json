@@ -31,10 +31,15 @@
       "Draw a seated lower body and boots for the fisherman.",
       "Use moving water for the shared fishing-net outline.",
       "Allow the rescued turtle to face its swimming direction.",
-      "Accept a catch-squash value animated by Phaser Tweens."
+      "Accept a catch-squash value animated by Phaser Tweens.",
+      "Allow a wider camera viewport without stretching actors.",
+      "Allow cyan luminous fish while retaining the original tail/blink drawing."
     ],
     "src/game.js": [
       "Allow netShape to accept a moving water level; rendering and collision share its polygon."
+    ],
+    "src/scenery.js": [
+      "Extend sky/water fills and distant shoreline to the optional wider viewport."
     ]
   }
 }

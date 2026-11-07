@@ -31,11 +31,12 @@ export function swellOf(game, stage, reducedMotion) {
 
 // Scenery is painted first, tinted in place, and the sky is slipped in behind it.
 export function drawSky(c, stage, water, d, motion, game, reducedMotion, drawScenery) {
+  const viewWidth = game?.viewWidth ?? 480;
   const th = STAGES[stage].theme;
   const show = game ? showState(game, reducedMotion) : null;
   drawScenery();
   if (show?.name === 'trawler') trawler(c, water, show, motion);
-  if (th.tint) { c.globalCompositeOperation = 'source-atop'; c.fillStyle = th.tint; c.fillRect(-30, -30, 540, water + 30); }
+  if (th.tint) { c.globalCompositeOperation = 'source-atop'; c.fillStyle = th.tint; c.fillRect(-30, -30, viewWidth + 60, water + 30); }
   c.globalCompositeOperation = 'source-over';
   c.globalCompositeOperation = 'destination-over';
   // Far shoreline: slowest layer.
@@ -44,11 +45,11 @@ export function drawSky(c, stage, water, d, motion, game, reducedMotion, drawSce
     fill(c, th.far, p => {
       const shift = d * (layer ? .012 : .028);
       p.moveTo(-30, water);
-      for (let x = -30; x <= 520; x += 20) {
+      for (let x = -30; x <= viewWidth + 40; x += 20) {
         const u = (x + shift) * (layer ? .006 : .011);
         p.lineTo(x, water - (layer ? 46 : 20) - Math.sin(u) * (layer ? 24 : 11) - Math.sin(u * 2.7 + 1) * (layer ? 10 : 6));
       }
-      p.lineTo(520, water); p.closePath();
+      p.lineTo(viewWidth + 40, water); p.closePath();
     });
   }
   c.globalAlpha = 1;
@@ -82,8 +83,8 @@ export function drawSky(c, stage, water, d, motion, game, reducedMotion, drawSce
     fill(c, '#fff4c777', p => p.arc(397, water - 140, 43, 0, TAU));
     fill(c, '#fff0bd35', p => p.arc(397, water - 140, 61, 0, TAU));
   }
-  c.fillStyle = vertical(c, water - 150, water, [[0, th.glow.slice(0, 7) + '00'], [1, th.glow]]); c.fillRect(-30, water - 150, 540, 150);
-  c.fillStyle = vertical(c, 0, water, th.sky); c.fillRect(-30, -30, 540, water + 30);
+  c.fillStyle = vertical(c, water - 150, water, [[0, th.glow.slice(0, 7) + '00'], [1, th.glow]]); c.fillRect(-30, water - 150, viewWidth + 60, 150);
+  c.fillStyle = vertical(c, 0, water, th.sky); c.fillRect(-30, -30, viewWidth + 60, water + 30);
   c.globalCompositeOperation = 'source-over';
   if (show?.name === 'goldenHour') goldenHour(c, water, show, motion);
   if (show?.name === 'shootingStars') shootingStars(c, water, show);
@@ -184,9 +185,10 @@ export function drawDolphins(c, game, water, motion, reducedMotion) {
 }
 
 export function drawWater(c, stage, water, d, motion, game, reducedMotion) {
+  const viewWidth = game?.viewWidth ?? 480;
   const th = STAGES[stage].theme;
-  c.fillStyle = vertical(c, water, 850, [[0, th.water[0]], [1, th.water[1]]]); c.fillRect(-30, water, 540, 880 - water);
-  c.fillStyle = vertical(c, water, water + 110, [[0, th.surface], [1, th.surface.slice(0, 7) + '00']]); c.fillRect(-30, water, 540, 110);
+  c.fillStyle = vertical(c, water, 850, [[0, th.water[0]], [1, th.water[1]]]); c.fillRect(-30, water, viewWidth + 60, 880 - water);
+  c.fillStyle = vertical(c, water, water + 110, [[0, th.surface], [1, th.surface.slice(0, 7) + '00']]); c.fillRect(-30, water, viewWidth + 60, 110);
   // Moon path just below the surface.
   if (STAGES[stage].id === 'reef') {
     for (let k = 0; k < 9; k++) {
@@ -208,8 +210,8 @@ export function drawWater(c, stage, water, d, motion, game, reducedMotion) {
   c.globalAlpha = .5;
   fill(c, th.rocks, p => {
     p.moveTo(-30, 850);
-    for (let x = -30; x <= 520; x += 16) { const u = (x + d * .1) * .013; p.lineTo(x, 770 - Math.abs(Math.sin(u)) * 62 - Math.sin(u * 3.1) * 14); }
-    p.lineTo(520, 850); p.closePath();
+    for (let x = -30; x <= viewWidth + 40; x += 16) { const u = (x + d * .1) * .013; p.lineTo(x, 770 - Math.abs(Math.sin(u)) * 62 - Math.sin(u * 3.1) * 14); }
+    p.lineTo(viewWidth + 40, 850); p.closePath();
   });
   c.globalAlpha = 1;
   if (STAGES[stage].id === 'harbor') {

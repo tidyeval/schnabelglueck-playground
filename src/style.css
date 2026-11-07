@@ -3,3 +3,5 @@
 .features small{display:block;margin-top:9px;font-size:10px;color:#81978b}.features [data-done="true"] small{color:#26744c;font-weight:700}.features p{margin:0;padding:12px;border-radius:12px;background:#f8faed88}.features [data-done="true"]{background:#e1efda}
 
 .hud #sound{width:auto;padding:0 9px;font-size:10px;border-radius:10px}#combo{font-size:10px;color:#b67c36}.goodies{margin-top:0}
+
+#world{position:absolute;inset:0;pointer-events:none}#game{position:relative}

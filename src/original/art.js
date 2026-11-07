@@ -43,15 +43,15 @@ function island(c, x, water, t) {
   c.fillStyle = '#ffe5a1'; c.fillRect(-44, -126, 6, 8);
   palm(c, 28, -30, .55, t); c.restore();
 }
-export function fish(c, x, y, scale = 1, golden = false, t = 0, scared = 0, tilt = 0) {
+export function fish(c, x, y, scale = 1, golden = false, t = 0, scared = 0, tilt = 0, glowing = false) {
   const swim = Math.sin(t * (tilt ? 16 : 7)) * .16;
   c.save(); c.translate(x, y); c.scale(scale, scale); c.rotate(Math.sin(t * 3) * .035 + tilt);
-  const col = golden ? '#f6cd5f' : '#efa98e', edge = golden ? '#b9823e' : '#af6f66';
+  const col = glowing ? '#c1fff0' : golden ? '#f6cd5f' : '#efa98e', edge = glowing ? '#469d9b' : golden ? '#b9823e' : '#af6f66';
   c.save(); c.translate(10, 0); c.rotate(swim); c.translate(-10, 0);
-  path(c, golden ? '#e6a94c' : '#d68172', p => { p.moveTo(9, 0); p.lineTo(28, -13); p.quadraticCurveTo(23, 0, 28, 13); p.closePath(); }, edge, 1); c.restore();
-  ellipse(c, 0, 0, 18, 10.5, gradient(c, -10, 11, col, golden ? '#e9ae51' : '#d98b7d'));
-  ellipse(c, -5, 3, 10, 5, golden ? '#ffe9a1' : '#ffd3b9');
-  path(c, golden ? '#e3a448' : '#d47d70', p => { p.moveTo(-1, -8); p.lineTo(8, -16); p.lineTo(12, -5); p.closePath(); }, edge, .8);
+  path(c, glowing ? '#6ce2cc' : golden ? '#e6a94c' : '#d68172', p => { p.moveTo(9, 0); p.lineTo(28, -13); p.quadraticCurveTo(23, 0, 28, 13); p.closePath(); }, edge, 1); c.restore();
+  ellipse(c, 0, 0, 18, 10.5, gradient(c, -10, 11, col, glowing ? '#63c7c3' : golden ? '#e9ae51' : '#d98b7d'));
+  ellipse(c, -5, 3, 10, 5, glowing ? '#effff6' : golden ? '#ffe9a1' : '#ffd3b9');
+  path(c, glowing ? '#7ce8d0' : golden ? '#e3a448' : '#d47d70', p => { p.moveTo(-1, -8); p.lineTo(8, -16); p.lineTo(12, -5); p.closePath(); }, edge, .8);
   path(c, null, p => { p.moveTo(-2, -7); p.quadraticCurveTo(5, -2, 12, -1); }, '#fff0c477', 1.2);
   cuteEye(c, -9.5, -2.5, 4.2 + scared * 1.2, scared ? 1 : blink(t, y * .013), '#315653');
   ellipse(c, -6.5, 3.6, 3, 1.7, '#f3868a55');
@@ -412,7 +412,8 @@ export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = fal
   const water = menu ? 466 : game.waterLevel ?? WORLD.water;
   const d = menu ? (reducedMotion ? 0 : t * 12) : game.distance;
   const motion = reducedMotion ? 0 : t;
-  c.clearRect(0, 0, 480, 850);
+  const viewWidth = game.viewWidth ?? 480;
+  c.clearRect(0, 0, viewWidth, 850);
   const stage = menu ? 0 : game.stage, theme = STAGES[stage].theme, night = STAGES[stage].night;
   c.save();
   if (fx && (fx.shakeX || fx.shakeY)) { c.translate(240 + fx.shakeX, 425 + fx.shakeY); c.scale(1.03, 1.03); c.translate(-240, -425); }
@@ -452,7 +453,7 @@ export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = fal
     }
   }
   // Sandy seabed and gently moving sea grass frame the action.
-  path(c, theme.seabed, p => { p.moveTo(-30, 833); p.bezierCurveTo(120, 807, 172, 852, 282, 832); p.quadraticCurveTo(398, 803, 510, 825); p.lineTo(510, 880); p.lineTo(-30, 880); });
+  path(c, theme.seabed, p => { p.moveTo(-30, 833); p.bezierCurveTo(120, 807, 172, 852, 282, 832); p.quadraticCurveTo(398, 803, viewWidth + 30, 825); p.lineTo(viewWidth + 30, 880); p.lineTo(-30, 880); });
   drawCaustics(c, stage, d, motion, reducedMotion);
   for (let side = 0; side < 2; side++) {
     for (let i = 0; i < 8; i++) { const x = side ? 475 - i * 9 : i * 9 - 15; const h = 37 + (i * 31) % 112;
@@ -681,7 +682,7 @@ export function drawWorld(c, game, mode, t, outfit, effects, reducedMotion = fal
   }
   const swell = menu ? 1 : swellOf(game, stage, reducedMotion);
   for (let i = 0; i < 4; i++) {
-    path(c, null, p => { for (let x = -30; x <= 510; x += 8) { const y = water + i * 4 + Math.sin(x * .025 + motion * 1.6 + i * .3) * 3 * swell + Math.sin(x * .011 - motion * .9) * 2.2 * (swell - 1); if (x === -30) p.moveTo(x, y); else p.lineTo(x, y); } }, ['#fff1c8cc', '#dceccf88', '#c3ead455', '#b7e4cc22'][i], i === 0 ? 2 : 1);
+    path(c, null, p => { for (let x = -30; x <= viewWidth + 30; x += 8) { const y = water + i * 4 + Math.sin(x * .025 + motion * 1.6 + i * .3) * 3 * swell + Math.sin(x * .011 - motion * .9) * 2.2 * (swell - 1); if (x === -30) p.moveTo(x, y); else p.lineTo(x, y); } }, ['#fff1c8cc', '#dceccf88', '#c3ead455', '#b7e4cc22'][i], i === 0 ? 2 : 1);
   }
   if (!reducedMotion) for (let i = 0; i < 7; i++) {
     const x = ((i * 77 - d * .5) % 540 + 540) % 540 - 30, glint = Math.max(0, Math.sin(motion * 2.4 + i * 1.9));
